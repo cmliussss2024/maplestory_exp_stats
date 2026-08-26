@@ -1,0 +1,6 @@
+opencv-python-headless>=4.0
+numpy
+pillow
+mss
+rapidocr-onnxruntime
+onnxruntime

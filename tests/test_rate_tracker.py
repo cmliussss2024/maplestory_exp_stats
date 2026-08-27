@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from chart import Candle
-from rate_tracker import RateTracker, Rates
+from rate_tracker import ExpPoint, RateTracker, Rates, sanitize_exp_series
 
 
 class HourlyRateTests(unittest.TestCase):
@@ -107,7 +107,10 @@ class HistoryPersistTests(unittest.TestCase):
             self.assertGreaterEqual(len(lines), 2)
             last = json.loads(lines[-1])
             self.assertEqual(last["exp"], 1100)
-            self.assertEqual(last["d"], 100)
+            self.assertNotIn("d", last)
+            self.assertEqual(set(last), {"t", "exp"})
+            t_text = lines[-1].split('"t": ', 1)[1].split(",", 1)[0]
+            self.assertRegex(t_text, r"^\d+\.\d{6}$")
 
     def test_clear_resets_memory_and_truncates_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -141,6 +144,39 @@ class HistoryPersistTests(unittest.TestCase):
         rates = tracker.tick(2100, now=3.0)
         self.assertEqual(tracker.last_exp, 2100)
         self.assertEqual(rates.per_min, 6000)
+
+    def test_timestamp_is_serialized_with_six_decimals(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "exp_history.jsonl"
+            tracker = RateTracker(history_path=path)
+            tracker.tick(1000, now=1787839419.03855)
+            line = path.read_text(encoding="utf-8").strip()
+            self.assertEqual(line, '{"t": 1787839419.038550, "exp": 1000}')
+
+    def test_drop_is_persisted_and_skipped_on_reload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "exp_history.jsonl"
+            first = RateTracker(history_path=path)
+            first.tick(10001, now=1.0)
+            first.tick(1010, now=2.0)
+            first.tick(10204, now=3.0)
+            text = path.read_text(encoding="utf-8")
+            self.assertIn('"exp": 1010', text)
+            second = RateTracker(history_path=path)
+            self.assertEqual(second.last_exp, 10204)
+            self.assertEqual(second.total_gained(), 203)
+
+    def test_legacy_records_with_d_still_load(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "exp_history.jsonl"
+            path.write_text(
+                '{"t": 1787766181.7113051, "exp": 1000, "d": 0}\n'
+                '{"t": 1787766182.1234567, "exp": 1100, "d": 100}\n',
+                encoding="utf-8",
+            )
+            tracker = RateTracker(history_path=path)
+            self.assertEqual(tracker.last_exp, 1100)
+            self.assertEqual(tracker.total_gained(), 100)
 
 
 class RollingMinuteSeriesTests(unittest.TestCase):
@@ -274,8 +310,8 @@ class OcrRecoveryTests(unittest.TestCase):
         tracker.tick(280, now=13.0)
         rates = tracker.tick(360, now=14.0)
         self.assertEqual(tracker.last_exp, 360)
-        self.assertEqual(tracker.total_gained(), 5080)
-        self.assertEqual(rates.per_hour, int(round(5080 * 3600 / 13)))
+        self.assertEqual(tracker.total_gained(), 5240)
+        self.assertEqual(rates.per_hour, int(round(5240 * 3600 / 13)))
 
     def test_two_truncated_readings_do_not_confirm_a_fake_level_up(self):
         tracker = RateTracker()
@@ -304,9 +340,7 @@ class OcrRecoveryTests(unittest.TestCase):
 
     def test_recovers_from_inflated_baseline_and_counts_gains_again(self):
         tracker = RateTracker()
-        tracker.tick(103546, now=0.0)
-        tracker.tick(1035461, now=1.0)
-        tracker._last_exp = 1035461
+        tracker.tick(1035461, now=0.0)
         tracker.tick(107016, now=2.0)
         tracker.tick(107062, now=3.0)
         rates = tracker.tick(107108, now=4.0)
@@ -336,3 +370,130 @@ class ForecastAliasTests(unittest.TestCase):
         tracker.clear_if_idle(now=61.1)
         rates = tracker.forecast(61.1)
         self.assertEqual(rates, Rates(0, 0, 0, 0))
+
+
+class SanitizeExpSeriesTests(unittest.TestCase):
+    def test_single_ocr_valley_is_skipped(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 10001), ExpPoint(1.0, 1010), ExpPoint(2.0, 10204)],
+            now=2.0,
+        )
+        self.assertEqual(result.last_exp, 10204)
+        self.assertEqual(sum(delta for _t, delta in result.gains), 203)
+
+    def test_repeated_ocr_valley_is_skipped(self):
+        points = [ExpPoint(0.0, 10099)]
+        points.extend(ExpPoint(float(i), 1010) for i in range(1, 6))
+        points.append(ExpPoint(6.0, 10200))
+        result = sanitize_exp_series(points, now=6.0)
+        self.assertEqual(result.last_exp, 10200)
+        self.assertEqual(sum(delta for _t, delta in result.gains), 101)
+
+    def test_jittered_ocr_valley_is_skipped(self):
+        result = sanitize_exp_series(
+            [
+                ExpPoint(0.0, 10099),
+                ExpPoint(1.0, 1010),
+                ExpPoint(2.0, 1015),
+                ExpPoint(3.0, 1020),
+                ExpPoint(4.0, 10200),
+            ],
+            now=4.0,
+        )
+        self.assertEqual(result.last_exp, 10200)
+        self.assertEqual(sum(delta for _t, delta in result.gains), 101)
+
+    def test_confirmed_level_up_accumulates_both_sides(self):
+        result = sanitize_exp_series(
+            [
+                ExpPoint(0.0, 90000),
+                ExpPoint(1.0, 95000),
+                ExpPoint(2.0, 120),
+                ExpPoint(3.0, 200),
+                ExpPoint(13.0, 280),
+                ExpPoint(14.0, 360),
+            ],
+            now=14.0,
+        )
+        self.assertEqual(result.last_exp, 360)
+        self.assertEqual(sum(delta for _t, delta in result.gains), 5240)
+
+    def test_unconfirmed_valley_keeps_previous_baseline(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 10099), ExpPoint(1.0, 1010)],
+            now=6.0,
+        )
+        self.assertEqual(result.last_exp, 10099)
+        self.assertEqual(result.gains, ())
+
+    def test_timeout_confirms_level_up(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 10099), ExpPoint(1.0, 1010)],
+            now=16.0,
+        )
+        self.assertEqual(result.last_exp, 1010)
+        self.assertEqual(result.gains, ())
+
+    def test_recovery_after_timeout_reclassifies_as_ocr(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 10099), ExpPoint(1.0, 1010), ExpPoint(16.0, 10200)],
+            now=16.0,
+        )
+        self.assertEqual(result.last_exp, 10200)
+        self.assertEqual(sum(delta for _t, delta in result.gains), 101)
+
+    def test_gradual_climb_after_level_up_is_not_ocr(self):
+        points = [ExpPoint(0.0, 10099), ExpPoint(1.0, 50)]
+        exp = 50
+        for second in range(2, 122):
+            exp += 100
+            points.append(ExpPoint(float(second), exp))
+        result = sanitize_exp_series(points, now=121.0)
+        self.assertEqual(result.last_exp, exp)
+        self.assertEqual(sum(delta for _t, delta in result.gains), exp - 50)
+        self.assertNotEqual(sum(delta for _t, delta in result.gains), exp - 10099)
+
+    def test_implausible_jump_is_skipped(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 8486), ExpPoint(1.0, 1_359_000)],
+            now=1.0,
+        )
+        self.assertEqual(result.last_exp, 8486)
+        self.assertEqual(result.gains, ())
+
+    def test_truncated_drop_recovers(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 25852), ExpPoint(1.0, 2586), ExpPoint(2.0, 25863)],
+            now=2.0,
+        )
+        self.assertEqual(result.last_exp, 25863)
+        self.assertEqual(sum(delta for _t, delta in result.gains), 11)
+
+    def test_truncated_expansion_resets_baseline(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 6685), ExpPoint(1.0, 67106)],
+            now=1.0,
+        )
+        self.assertEqual(result.last_exp, 67106)
+        self.assertEqual(result.gains, ())
+
+    def test_suffix_noise_is_not_a_gain(self):
+        result = sanitize_exp_series(
+            [ExpPoint(0.0, 103546), ExpPoint(1.0, 1035461)],
+            now=1.0,
+        )
+        self.assertEqual(result.last_exp, 103546)
+        self.assertEqual(result.gains, ())
+
+    def test_inflated_baseline_recovers(self):
+        result = sanitize_exp_series(
+            [
+                ExpPoint(0.0, 1035461),
+                ExpPoint(2.0, 107016),
+                ExpPoint(3.0, 107062),
+                ExpPoint(4.0, 107108),
+            ],
+            now=4.0,
+        )
+        self.assertEqual(result.last_exp, 107108)
+        self.assertEqual(sum(delta for _t, delta in result.gains), 92)

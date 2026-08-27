@@ -57,8 +57,8 @@
 点 `c` 相对 `a`、低谷末点 `v` 是**跳回接上**，当且仅当：
 
 - `c.exp >= a.exp`
-- `_plausible_gain(a.exp, c.exp)` 为真
-- `_plausible_gain(v.exp, c.exp)` 为假
+- `_plausible_gain(a.exp, c.exp)` 为真（`c.exp == a.exp` 也算接上，delta 0）
+- 并且相对 `v` 不是「谷底小步」：`_plausible_gain(v.exp, c.exp)` 为假，**或** `c` 的位数多于 `v`（谷底 `< 1000` 时，`325 → 33402` 仍会被 `_plausible_gain` 当成合理增长，必须靠位数跳变识别 OCR）
 
 因此 `1010 → 10200` 是跳回（相对 `10099` 合理，相对 `1010` 不合理）。升级后 `10050 → 10150` 不是跳回（相对低谷末点也是合理小步），整段按升级后的新基数累加，不把中间收益丢掉。
 

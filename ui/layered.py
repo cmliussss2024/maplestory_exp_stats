@@ -135,6 +135,14 @@ def blit_layered(hwnd: int, image: Image.Image, x: int | None = None, y: int | N
     dib = gdi32.CreateDIBSection(
         hdc_mem, ctypes.byref(bmi), DIB_RGB_COLORS, ctypes.byref(bits), None, 0,
     )
+    if not hdc_mem or not dib or not bits.value:
+        if dib:
+            gdi32.DeleteObject(dib)
+        if hdc_mem:
+            gdi32.DeleteDC(hdc_mem)
+        if hdc_screen:
+            user32.ReleaseDC(0, hdc_screen)
+        return
     ctypes.memmove(bits, pixels, len(pixels))
     previous = gdi32.SelectObject(hdc_mem, dib)
     size = SIZE(int(width), int(height))

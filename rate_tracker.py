@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -187,6 +188,7 @@ class RateTracker:
         self._first_gain_at: float | None = None
         self._last_gain_at: float | None = None
         self._last_gain: int = 0
+        self._paused: float = 0.0
         self._gains: deque[tuple[float, int]] = deque()
         if self.history_path is not None:
             self._load_history()
@@ -206,7 +208,7 @@ class RateTracker:
         gained = self.total_gained()
         if gained <= 0:
             return Rates(0, 0, 0, 0)
-        elapsed = max(now - self._first_gain_at, 1.0)
+        elapsed = max(now - self._first_gain_at - self._paused, 1.0)
         return Rates(
             per_sec=int(round(gained / elapsed)),
             per_min=int(round(gained * 60.0 / elapsed)),
@@ -217,7 +219,7 @@ class RateTracker:
     def elapsed_since_first_gain(self, now: float) -> float | None:
         if self._first_gain_at is None:
             return None
-        return max(now - self._first_gain_at, 0.0)
+        return max(now - self._first_gain_at - self._paused, 0.0)
 
     def compute(self, now: float) -> Rates:
         return self.hourly_rates(now)
@@ -235,6 +237,7 @@ class RateTracker:
         self._first_gain_at = None
         self._last_gain_at = None
         self._last_gain = 0
+        self._paused = 0.0
         self._gains.clear()
         if self.history_path is None:
             return
@@ -415,9 +418,6 @@ class RateTracker:
 
     def _prune(self, now: float) -> None:
         self._refresh(now)
-        cutoff = now - 86400
-        while self._gains and self._gains[0][0] < cutoff:
-            self._gains.popleft()
 
     def _append_history(self, now: float, exp: int) -> None:
         if self.history_path is None:
@@ -441,14 +441,16 @@ class RateTracker:
                 continue
             try:
                 item = json.loads(line)
-            except json.JSONDecodeError:
+                ts = float(item["t"])
+                exp = int(item["exp"])
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                 continue
-            ts = float(item["t"])
-            exp = int(item["exp"])
             self._points.append(ExpPoint(ts, exp))
             if self._started_at is None:
                 self._started_at = ts
         if self._points:
             last_t = self._points[-1].t
             self._refresh(last_t)
-            self._prune(last_t)
+            gap = time.time() - last_t
+            if gap > 0:
+                self._paused = gap

@@ -75,8 +75,11 @@ class ExpRateApp:
         self.current = RateTracker()
         self.session = RateTracker(history_path=HISTORY_PATH)
         self._busy = False
+        self._closed = False
         self._last_exp: int | None = None
         self._window_placed = False
+        self._tick_job: str | None = None
+        self._ui_job: str | None = None
         self._save_pos_job: str | None = None
         self._last_saved_pos: tuple[int, int] | None = None
         self._last_gain_series: tuple | None = None
@@ -128,8 +131,8 @@ class ExpRateApp:
         if self.session.last_exp is not None:
             self._last_exp = self.session.last_exp
             self.current_exp.set(_fmt(self._last_exp))
-        self.root.after(200, self.tick)
-        self.root.after(1000, self._ui_tick)
+        self._tick_job = self.root.after(200, self.tick)
+        self._ui_job = self.root.after(1000, self._ui_tick)
 
     def enter_float(self) -> None:
         if self._float is not None:
@@ -198,6 +201,22 @@ class ExpRateApp:
         save_window_position(WINDOW_PATH, pos[0], pos[1])
 
     def _on_close(self) -> None:
+        self._closed = True
+        for attr in ("_tick_job", "_ui_job", "_save_pos_job"):
+            job = getattr(self, attr)
+            if job is None:
+                continue
+            try:
+                self.root.after_cancel(job)
+            except tk.TclError:
+                pass
+            setattr(self, attr, None)
+        try:
+            from window_capture import shutdown_capture
+
+            shutdown_capture()
+        except Exception:
+            pass
         if self._float is not None:
             pos = self._float.position()
             overlay = self._float
@@ -247,28 +266,36 @@ class ExpRateApp:
         self.session_time.set(_fmt_duration(self.session.elapsed_since_first_gain(now)))
 
     def _ui_tick(self) -> None:
+        if self._closed or not self.root.winfo_exists():
+            return
         now = time.time()
         self.current.clear_if_idle(now)
         self._refresh_rates(now)
         self._redraw_chart(now)
-        self.root.after(1000, self._ui_tick)
+        self._ui_job = self.root.after(1000, self._ui_tick)
 
     def tick(self) -> None:
+        if self._closed or not self.root.winfo_exists():
+            return
         delay = (
             LOCK_SCAN_MS
             if self.locator.state == LocatorState.LOCKED
             else SEARCH_SCAN_MS
         )
         if self._busy:
-            self.root.after(delay, self.tick)
+            self._tick_job = self.root.after(delay, self.tick)
             return
         self._busy = True
         try:
             self._scan_once()
+        except Exception as exc:
+            overlay_log("scan_error", error=repr(exc))
         finally:
             self._busy = False
+            if self._closed or not self.root.winfo_exists():
+                return
             self._refresh_status()
-            self.root.after(delay, self.tick)
+            self._tick_job = self.root.after(delay, self.tick)
 
     def _scan_once(self) -> None:
         if self.locator.state == LocatorState.FAILED:

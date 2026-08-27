@@ -181,10 +181,10 @@ def _grab_mss_region(left: int, top: int, width: int, height: int) -> np.ndarray
 def _mss_grab_impl(left: int, top: int, width: int, height: int) -> np.ndarray:
     import mss
 
-    sct = mss.mss()
-    frame = np.array(
-        sct.grab({"left": left, "top": top, "width": max(1, width), "height": max(1, height)})
-    )
+    with mss.mss() as sct:
+        frame = np.array(
+            sct.grab({"left": left, "top": top, "width": max(1, width), "height": max(1, height)})
+        )
     return frame[:, :, :3]
 
 
@@ -219,11 +219,11 @@ def grab_desktop() -> np.ndarray:
 def _grab_desktop_impl() -> np.ndarray:
     import mss
 
-    sct = mss.mss()
-    monitor = sct.monitors[0]
-    global _desktop_origin
-    _desktop_origin = (int(monitor["left"]), int(monitor["top"]))
-    frame = np.array(sct.grab(monitor))
+    with mss.mss() as sct:
+        monitor = sct.monitors[0]
+        global _desktop_origin
+        _desktop_origin = (int(monitor["left"]), int(monitor["top"]))
+        frame = np.array(sct.grab(monitor))
     return frame[:, :, :3]
 
 
@@ -285,17 +285,17 @@ def find_game_window() -> tuple[int, int, int, int, str] | None:
 
 def capture_for_search() -> tuple[np.ndarray, int, int]:
     """Grab the game window only. Fallback is the full desktop."""
-    from window_capture import client_origin, grab_hwnd
+    from window_capture import client_bounds, grab_hwnd
 
     game = find_game_window()
     if game is not None and _game_hwnd is not None:
         hwnd = _game_hwnd
         image = grab_hwnd(hwnd)
         if image is not None:
-            origin_x, origin_y = client_origin(hwnd)
+            origin_x, origin_y, _width, _height = client_bounds(hwnd)
             return image, origin_x, origin_y
-        left, top, right, bottom, _title = game
-        image = _grab_mss_region(left, top, right - left, bottom - top)
+        left, top, width, height = client_bounds(hwnd)
+        image = _grab_mss_region(left, top, width, height)
         return image, left, top
     image = grab_desktop()
     return image, _desktop_origin[0], _desktop_origin[1]

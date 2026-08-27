@@ -259,8 +259,39 @@ def grab_hwnd(hwnd: int) -> np.ndarray | None:
 
 
 def client_origin(hwnd: int) -> tuple[int, int]:
+    left, top, _width, _height = client_bounds(hwnd)
+    return left, top
+
+
+def client_bounds(hwnd: int) -> tuple[int, int, int, int]:
+    """Client area as (left, top, width, height) in physical virtual-screen pixels."""
     from dpi import logical_to_physical
 
-    point = wintypes.POINT(0, 0)
-    ctypes.windll.user32.ClientToScreen(hwnd, byref(point))
-    return logical_to_physical(hwnd, int(point.x), int(point.y))
+    rect = wintypes.RECT()
+    ctypes.windll.user32.GetClientRect(hwnd, byref(rect))
+    origin = wintypes.POINT(0, 0)
+    ctypes.windll.user32.ClientToScreen(hwnd, byref(origin))
+    corner = wintypes.POINT(rect.right, rect.bottom)
+    ctypes.windll.user32.ClientToScreen(hwnd, byref(corner))
+    left, top = logical_to_physical(hwnd, int(origin.x), int(origin.y))
+    right, bottom = logical_to_physical(hwnd, int(corner.x), int(corner.y))
+    return left, top, max(1, right - left), max(1, bottom - top)
+
+
+def shutdown_capture() -> None:
+    """Release the Graphics Capture session and D3D device."""
+    global _device_native, _context_native, _winrt_device
+    _close_session()
+    if _context_native is not None:
+        try:
+            _release(_context_native)
+        except Exception:
+            pass
+        _context_native = None
+    if _device_native is not None:
+        try:
+            _release(_device_native)
+        except Exception:
+            pass
+        _device_native = None
+    _winrt_device = None

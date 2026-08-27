@@ -6,6 +6,7 @@ venv/
 
 data/exp_history.jsonl
 data/window.json
+data/overlay-debug.log
 
 Thumbs.db
 Desktop.ini

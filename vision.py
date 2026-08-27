@@ -299,28 +299,3 @@ def capture_for_search() -> tuple[np.ndarray, int, int]:
         return image, left, top
     image = grab_desktop()
     return image, _desktop_origin[0], _desktop_origin[1]
-
-
-def find_label_on_desktop(screen_bgr: np.ndarray) -> tuple[tuple[int, int, int, int] | None, float]:
-    """Kept for tests; prefer capture_for_search in the app."""
-    game = find_game_window()
-    if game is None:
-        return find_label(screen_bgr)
-    left, top, right, bottom, _title = game
-    origin_x, origin_y = _desktop_origin
-    x0 = left - origin_x
-    y0 = top - origin_y
-    x1 = right - origin_x
-    y1 = bottom - origin_y
-    x0 = max(0, x0)
-    y0 = max(0, y0)
-    x1 = min(screen_bgr.shape[1], x1)
-    y1 = min(screen_bgr.shape[0], y1)
-    if x1 <= x0 or y1 <= y0:
-        return find_label(screen_bgr)
-    crop = screen_bgr[y0:y1, x0:x1]
-    rect, score = find_label(crop)
-    if rect is None:
-        return None, score
-    rx, ry, rw, rh = rect
-    return (rx + x0, ry + y0, rw, rh), score

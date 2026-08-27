@@ -4,8 +4,8 @@ Per-monitor DPI on the UI thread makes Windows send WM_DPICHANGED whenever
 the window sits on a 150% display (or whenever capture temporarily switches
 the thread). Tk then rebuilds the layout: the window shrinks and flickers.
 
-The process stays DPI-unaware. Capture that needs physical pixels runs on a
-worker thread, never on the Tk thread.
+The process stays DPI-unaware. mss grabs that need physical pixels run on a
+worker thread via physical_call. Graphics Capture runs on the caller thread.
 """
 
 from __future__ import annotations

@@ -3,7 +3,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from chart import Candle
 from rate_tracker import ExpPoint, RateTracker, Rates, sanitize_exp_series
 
 
@@ -179,30 +178,6 @@ class HistoryPersistTests(unittest.TestCase):
             self.assertEqual(tracker.total_gained(), 100)
 
 
-class RollingMinuteSeriesTests(unittest.TestCase):
-    def test_empty_tracker_fills_span_with_zeros(self):
-        tracker = RateTracker()
-        self.assertEqual(
-            tracker.rolling_minute_series(now=10.0, span=2.0, step=1.0),
-            [0, 0, 0],
-        )
-
-    def test_steady_gains_fill_the_trailing_minute(self):
-        tracker = RateTracker()
-        tracker.tick(0, now=0.0)
-        for second in range(1, 121):
-            tracker.tick(second * 10, now=float(second))
-        series = tracker.rolling_minute_series(now=120.0, span=5.0, step=1.0)
-        self.assertEqual(series, [600, 600, 600, 600, 600, 600])
-
-    def test_gain_drops_out_after_sixty_seconds(self):
-        tracker = RateTracker()
-        tracker.tick(100, now=0.0)
-        tracker.tick(200, now=10.0)
-        series = tracker.rolling_minute_series(now=70.0, span=2.0, step=1.0)
-        self.assertEqual(series, [100, 100, 0])
-
-
 class ChartSeriesTests(unittest.TestCase):
     def test_empty_chart_series_are_zeros(self):
         tracker = RateTracker()
@@ -229,56 +204,6 @@ class ChartSeriesTests(unittest.TestCase):
         tracker.tick(1000, now=0.0)
         tracker.tick(1100, now=8.0)
         self.assertEqual(tracker.chart_axis_start_label(10.0, 5.0, "5分钟前"), "开始")
-
-
-class SecondSeriesTests(unittest.TestCase):
-    def test_empty_second_gain_series_is_zeros(self):
-        tracker = RateTracker()
-        self.assertEqual(
-            tracker.second_gain_series(now=10.0, span=2.0, step=1.0),
-            [0, 0, 0],
-        )
-
-    def test_second_gain_series_buckets_each_second(self):
-        tracker = RateTracker()
-        tracker.tick(0, now=0.0)
-        tracker.tick(10, now=1.0)
-        tracker.tick(10, now=2.0)
-        tracker.tick(25, now=3.0)
-        self.assertEqual(
-            tracker.second_gain_series(now=3.0, span=2.0, step=1.0),
-            [10, 0, 15],
-        )
-
-    def test_second_increment_series_is_running_total(self):
-        tracker = RateTracker()
-        tracker.tick(0, now=0.0)
-        tracker.tick(10, now=1.0)
-        tracker.tick(10, now=2.0)
-        tracker.tick(25, now=3.0)
-        self.assertEqual(
-            tracker.second_increment_series(now=3.0, span=2.0, step=1.0),
-            [10, 10, 25],
-        )
-
-
-class CandleSeriesTests(unittest.TestCase):
-    def test_empty_candles_are_flat_zeros(self):
-        candles = RateTracker().candle_series(now=10.0, span=2.0, candles=2, parts=2)
-        self.assertEqual(candles, [Candle(0, 0, 0, 0), Candle(0, 0, 0, 0)])
-
-    def test_close_is_gain_in_that_bucket_and_open_is_previous_close(self):
-        tracker = RateTracker()
-        tracker.tick(0, now=0.0)
-        tracker.tick(10, now=1.0)
-        tracker.tick(10, now=2.0)
-        tracker.tick(30, now=3.0)
-        first, second = tracker.candle_series(now=3.0, span=2.0, candles=2, parts=2)
-        self.assertEqual(first.close, 0)
-        self.assertEqual(second.open, first.close)
-        self.assertEqual(second.close, 20)
-        self.assertEqual(second.high, 20)
-        self.assertEqual(second.low, 0)
 
 
 class OcrRecoveryTests(unittest.TestCase):
@@ -354,22 +279,6 @@ class OcrRecoveryTests(unittest.TestCase):
         rates = tracker.tick(1100, now=1.0)
         self.assertEqual(tracker.last_exp, 1100)
         self.assertEqual(rates.per_min, 60000)
-
-
-class ForecastAliasTests(unittest.TestCase):
-    def test_forecast_matches_hourly_rates(self):
-        tracker = RateTracker()
-        tracker.tick(1000, now=0.0)
-        tracker.tick(1100, now=10.0)
-        self.assertEqual(tracker.forecast(10.0), tracker.hourly_rates(10.0))
-
-    def test_forecast_is_zero_when_idle(self):
-        tracker = RateTracker()
-        tracker.tick(1000, now=0.0)
-        tracker.tick(1100, now=1.0)
-        tracker.clear_if_idle(now=61.1)
-        rates = tracker.forecast(61.1)
-        self.assertEqual(rates, Rates(0, 0, 0, 0))
 
 
 class SanitizeExpSeriesTests(unittest.TestCase):

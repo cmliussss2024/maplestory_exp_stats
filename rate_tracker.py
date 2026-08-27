@@ -7,8 +7,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from chart import Candle
-
 
 @dataclass(frozen=True)
 class ExpPoint:
@@ -65,26 +63,20 @@ def _is_inflated_baseline(baseline: int, reading: int) -> bool:
     if reading >= baseline:
         return False
     base_s = str(baseline)
-    for trim in (1,):
-        if len(base_s) <= trim:
-            continue
-        trimmed_s = base_s[:-trim]
-        trimmed = int(trimmed_s)
-        if trimmed <= 0 or reading < trimmed:
-            continue
-        suffix = base_s[len(trimmed_s) :]
-        if len(suffix) != trim:
-            continue
-        inflated_cap = trimmed * (10 ** len(suffix)) + (10 ** len(suffix) - 1)
-        if baseline > inflated_cap:
-            continue
-        if reading < trimmed * 1.01:
-            continue
-        if reading - trimmed <= 100:
-            continue
-        if reading - trimmed <= max(int(trimmed * 0.15), 5000):
-            return True
-    return False
+    if len(base_s) <= 1:
+        return False
+    trimmed_s = base_s[:-1]
+    trimmed = int(trimmed_s)
+    if trimmed <= 0 or reading < trimmed:
+        return False
+    inflated_cap = trimmed * 10 + 9
+    if baseline > inflated_cap:
+        return False
+    if reading < trimmed * 1.01:
+        return False
+    if reading - trimmed <= 100:
+        return False
+    return reading - trimmed <= max(int(trimmed * 0.15), 5000)
 
 
 def _is_truncated_expansion(previous: int, new: int) -> bool:
@@ -184,10 +176,8 @@ class RateTracker:
         self.history_path = Path(history_path) if history_path else None
         self._points: list[ExpPoint] = []
         self._last_exp: int | None = None
-        self._started_at: float | None = None
         self._first_gain_at: float | None = None
         self._last_gain_at: float | None = None
-        self._last_gain: int = 0
         self._paused: float = 0.0
         self._gains: deque[tuple[float, int]] = deque()
         if self.history_path is not None:
@@ -221,22 +211,14 @@ class RateTracker:
             return None
         return max(now - self._first_gain_at - self._paused, 0.0)
 
-    def compute(self, now: float) -> Rates:
-        return self.hourly_rates(now)
-
-    def forecast(self, now: float) -> Rates:
-        return self.hourly_rates(now)
-
     def total_gained(self) -> int:
         return sum(delta for _ts, delta in self._gains)
 
     def clear(self) -> None:
         self._points.clear()
         self._last_exp = None
-        self._started_at = None
         self._first_gain_at = None
         self._last_gain_at = None
-        self._last_gain = 0
         self._paused = 0.0
         self._gains.clear()
         if self.history_path is None:
@@ -253,17 +235,14 @@ class RateTracker:
         self.clear()
         return True
 
-    def _record(self, exp: int | None, now: float, persist: bool = True) -> None:
+    def _record(self, exp: int | None, now: float) -> None:
         if exp is None:
             return
         stamped = _round_t(now)
-        if self._started_at is None:
-            self._started_at = stamped
         if self._points and self._points[-1].exp == exp:
             return
         self._points.append(ExpPoint(stamped, exp))
-        if persist:
-            self._append_history(stamped, exp)
+        self._append_history(stamped, exp)
 
     def _refresh(self, now: float) -> None:
         result = sanitize_exp_series(self._points, now)
@@ -271,62 +250,6 @@ class RateTracker:
         self._gains = deque(result.gains)
         self._first_gain_at = result.first_gain_at
         self._last_gain_at = result.last_gain_at
-        self._last_gain = result.last_gain
-
-    def candle_series(
-        self,
-        now: float,
-        span: float,
-        candles: int = 60,
-        parts: int = 4,
-    ) -> list[Candle]:
-        self._prune(now)
-        step = span / candles
-        part_step = step / parts
-        previous_close = 0
-        series: list[Candle] = []
-        for index in range(candles):
-            start = now - span + index * step
-            end = start + step
-            close = self._sum_between(start, end)
-            part_sums = [
-                self._sum_between(start + part * part_step, start + (part + 1) * part_step)
-                for part in range(parts)
-            ]
-            high = max(previous_close, close, *part_sums)
-            low = min(previous_close, close, *part_sums)
-            series.append(Candle(previous_close, high, low, close))
-            previous_close = close
-        return series
-
-    def rolling_minute_series(
-        self,
-        now: float,
-        span: float = 300.0,
-        step: float = 1.0,
-    ) -> list[int]:
-        return self._sample_series(now, span, step, window=60.0)
-
-    def second_gain_series(
-        self,
-        now: float,
-        span: float = 300.0,
-        step: float = 1.0,
-    ) -> list[int]:
-        return self._sample_series(now, span, step, window=step)
-
-    def second_increment_series(
-        self,
-        now: float,
-        span: float = 300.0,
-        step: float = 1.0,
-    ) -> list[int]:
-        running = 0
-        totals: list[int] = []
-        for gain in self.second_gain_series(now, span, step):
-            running += gain
-            totals.append(running)
-        return totals
 
     def chart_rate_series(
         self,
@@ -357,7 +280,7 @@ class RateTracker:
         step: float,
         target: float | None,
     ) -> list[int]:
-        self._prune(now)
+        self._refresh(now)
         sample_times = self._sample_times(now, span, step)
         if self._first_gain_at is None:
             return [0] * len(sample_times)
@@ -395,30 +318,6 @@ class RateTracker:
             times.append(now)
         return times
 
-    def _sample_series(
-        self,
-        now: float,
-        span: float,
-        step: float,
-        window: float,
-    ) -> list[int]:
-        self._prune(now)
-        values: list[int] = []
-        sample = now - span
-        while sample <= now + 1e-9:
-            values.append(self._sum_between(sample - window, sample))
-            sample += step
-        return values
-
-    def _sum_since(self, cutoff: float) -> int:
-        return sum(delta for ts, delta in self._gains if ts > cutoff)
-
-    def _sum_between(self, start: float, end: float) -> int:
-        return sum(delta for ts, delta in self._gains if start < ts <= end)
-
-    def _prune(self, now: float) -> None:
-        self._refresh(now)
-
     def _append_history(self, now: float, exp: int) -> None:
         if self.history_path is None:
             return
@@ -446,8 +345,6 @@ class RateTracker:
             except (json.JSONDecodeError, KeyError, TypeError, ValueError):
                 continue
             self._points.append(ExpPoint(ts, exp))
-            if self._started_at is None:
-                self._started_at = ts
         if self._points:
             last_t = self._points[-1].t
             self._refresh(last_t)

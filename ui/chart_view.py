@@ -96,13 +96,3 @@ def paint_chart(
     canvas.create_text(
         plot_right, axis_y, text=axis_end, anchor="e", fill=Type.chart_axis, font=Type.chart_caption,
     )
-
-
-CHART_LAYOUT = {
-    "pad_x": Spacing.chart_pad_x,
-    "pad_top": Spacing.chart_pad_top,
-    "pad_bottom": Spacing.chart_pad_bottom,
-    "width": Spacing.chart_width,
-    "height": Spacing.chart_height,
-    "margin": Spacing.section_padding.padx,
-}

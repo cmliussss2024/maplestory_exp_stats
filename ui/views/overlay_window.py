@@ -1,4 +1,4 @@
-"""Transparent always-on-top HUD for forecast rates."""
+"""Transparent always-on-top HUD for current rates."""
 
 from __future__ import annotations
 

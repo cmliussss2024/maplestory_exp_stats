@@ -15,11 +15,10 @@ class LocatorTests(unittest.TestCase):
         self.assertEqual(loc.state, LocatorState.LOCKED)
         self.assertEqual(loc.locked_rect, (10, 20, 200, 40))
 
-    def test_three_search_misses_fail(self):
+    def test_search_misses_fail_after_limit(self):
         loc = Locator()
-        loc.on_search_result(None)
-        loc.on_search_result(None)
-        loc.on_search_result(None)
+        for _ in range(Locator.SEARCH_FAIL_LIMIT):
+            loc.on_search_result(None)
         self.assertEqual(loc.state, LocatorState.FAILED)
 
     def test_three_locked_misses_start_relocating(self):
@@ -38,15 +37,14 @@ class LocatorTests(unittest.TestCase):
         loc.on_lock_check(True)
         self.assertEqual(loc.state, LocatorState.LOCKED)
 
-    def test_relocate_three_misses_fail(self):
+    def test_relocate_misses_fail_after_limit(self):
         loc = Locator()
         loc.on_search_result((10, 20, 200, 40))
         loc.on_lock_check(False)
         loc.on_lock_check(False)
         loc.on_lock_check(False)
-        loc.on_search_result(None)
-        loc.on_search_result(None)
-        loc.on_search_result(None)
+        for _ in range(Locator.SEARCH_FAIL_LIMIT):
+            loc.on_search_result(None)
         self.assertEqual(loc.state, LocatorState.FAILED)
 
     def test_relocate_success_locks_new_rect(self):
@@ -61,9 +59,8 @@ class LocatorTests(unittest.TestCase):
 
     def test_retry_from_failed_starts_searching(self):
         loc = Locator()
-        loc.on_search_result(None)
-        loc.on_search_result(None)
-        loc.on_search_result(None)
+        for _ in range(Locator.SEARCH_FAIL_LIMIT):
+            loc.on_search_result(None)
         loc.retry()
         self.assertEqual(loc.state, LocatorState.SEARCHING)
         self.assertIsNone(loc.locked_rect)

@@ -27,6 +27,41 @@ class VisionTests(unittest.TestCase):
         bar = cv2.imread(str(ASSETS / "exp_bar.png"))
         self.assertEqual(read_exp_from_bgr(bar), 256163)
 
+    def test_ocr_reads_integer_from_live_style_crop(self):
+        crop = cv2.imread(str(ASSETS / "exp_crop_67106.png"))
+        self.assertIsNotNone(crop)
+        self.assertEqual(read_exp_from_bgr(crop), 67106)
+
+    def test_ocr_rect_hugs_exp_slot(self):
+        from vision import label_rect_to_ocr_rect
+
+        x, y, width, height = label_rect_to_ocr_rect((8, 8, 24, 13), 400, 200)
+        self.assertEqual((x, y, width, height), (7, 6, 121, 34))
+
+    def test_locked_crop_includes_full_yellow_green_slot(self):
+        from vision import crop_bgr, label_rect_to_ocr_rect
+
+        bar = cv2.imread(str(ASSETS / "exp_bar.png"))
+        self.assertIsNotNone(bar)
+        h, w = bar.shape[:2]
+        screen = np.zeros((200, 400, 3), dtype=np.uint8)
+        screen[50 : 50 + h, 80 : 80 + w] = bar
+        label_rect, _score = find_label(screen)
+        self.assertIsNotNone(label_rect)
+        rect = label_rect_to_ocr_rect(label_rect, 400, 200)
+        ox, oy, rw, rh = rect
+        self.assertGreater(ox, 80)
+        self.assertGreater(oy, 50)
+        self.assertLess(ox + rw, 80 + w)
+        self.assertLess(oy + rh, 50 + h)
+        crop = crop_bgr(screen, rect)
+        _b, g, r = cv2.split(crop)
+        yg = (g > 140) & (g > r) & (g > (_b.astype(np.int16) + 20))
+        ys, xs = np.where(yg)
+        self.assertGreater(int(yg.sum()), 800)
+        self.assertGreaterEqual(int(xs.max() - xs.min()), 90)
+        self.assertGreaterEqual(int(ys.max() - ys.min()), 10)
+
     def test_converts_screenshot_rect_to_virtual_screen(self):
         self.assertEqual(
             to_virtual_rect((3694, 1221, 150, 22), (-2560, 0)),

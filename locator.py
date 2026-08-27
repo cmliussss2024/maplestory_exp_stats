@@ -11,8 +11,9 @@ class LocatorState(Enum):
 
 
 class Locator:
-    SEARCH_FAIL_LIMIT = 3
+    SEARCH_FAIL_LIMIT = 20
     LOCK_FAIL_LIMIT = 3
+    SEARCH_INTERVAL_SECONDS = 3
 
     def __init__(self) -> None:
         self.state = LocatorState.SEARCHING

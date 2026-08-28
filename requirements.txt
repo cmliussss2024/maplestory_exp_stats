@@ -1,0 +1,15 @@
+opencv-python-headless>=4.0
+numpy
+pillow
+mss
+rapidocr-onnxruntime
+onnxruntime
+winrt-runtime
+winrt-Windows.Foundation
+winrt-Windows.Graphics
+winrt-Windows.Graphics.Capture
+winrt-Windows.Graphics.Capture.Interop
+winrt-Windows.Graphics.DirectX
+winrt-Windows.Graphics.DirectX.Direct3D11
+winrt-Windows.Graphics.DirectX.Direct3D11.Interop
+

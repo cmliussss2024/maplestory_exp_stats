@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "经验增速",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "python app.py",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "运行测试",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "python -m unittest discover -s tests -v",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

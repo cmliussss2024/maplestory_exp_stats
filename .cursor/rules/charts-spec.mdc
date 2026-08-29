@@ -9,7 +9,7 @@ alwaysApply: false
 `docs/charts.md` 是走势图的唯一规格。用户改该文档、或改点数/窗口/补 0/取值/标题时：
 
 1. 先读 `docs/charts.md`，以文档为准，不要沿用旧实现语义。
-2. 把 `rate_tracker.CHARTS` 的 title、count、step、axis_start、suffix、mode 改到与文档表一致。
-3. 采样、左补 0、`per_sec_rate` / `cumulative` 的点值必须符合文档公式；`chart_series` 只吃累计 `session`。
+2. 把 `rate_tracker.CHARTS` 的 title、count、step、axis_start、suffix、mode、source 改到与文档表一致。
+3. 采样、左补 0、`per_sec_rate` / `cumulative` 的点值必须符合文档公式；`chart_series` 吃 `spec.source` 对应的 tracker（`current` 本次 / `session` 累计）。
 4. UI 标题、轴标签、suffix 只从 `CHARTS` 读，不硬编码另一套文案。
 5. 文档与代码一起改。不要只改代码不改文档。

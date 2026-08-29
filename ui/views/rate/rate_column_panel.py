@@ -1,4 +1,4 @@
-"""One rate column: title, rows, and clear button."""
+"""One rate column: title, rows, and reset button."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ class RateColumnPanel(Panel):
         on_clear: Callable[[], None],
         value_unit_gap: int,
         clear_pad_y: tuple[int, int],
+        hint: str = "",
         **kwargs: Any,
     ) -> None:
         super().__init__(master, use_debug=False, **kwargs)
@@ -33,6 +34,14 @@ class RateColumnPanel(Panel):
             font=Type.rate_header,
             foreground=Type.rate_header_color,
         ).pack(anchor="e")
+        if hint:
+            ttk.Label(
+                self,
+                text=hint,
+                font=Type.rate_hint,
+                foreground=Type.rate_hint_color,
+                justify="right",
+            ).pack(anchor="e", pady=Spacing.rate_hint_pad_y)
         last = len(RATE_ROWS) - 1
         for index, (key, unit) in enumerate(RATE_ROWS):
             RateRowCell(
@@ -44,6 +53,6 @@ class RateColumnPanel(Panel):
                 anchor="e",
                 pady=(0, Spacing.rate_cell_spacing) if index < last else 0,
             )
-        ttk.Button(self, text="清空", command=on_clear).pack(
+        ttk.Button(self, text="重置", command=on_clear).pack(
             anchor="e", pady=(clear_pad_y[0], 0),
         )

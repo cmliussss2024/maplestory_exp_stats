@@ -31,6 +31,7 @@ class Spacing:
     session_value_unit_gap = 4
     forecast_clear_pad_y = (4, 4)
     session_clear_pad_y = (4, 4)
+    rate_hint_pad_y = (0, 2)
     divider_width = 1
     info_cell_spacing = 4
     retry_preview_spacing = 8
@@ -69,6 +70,8 @@ class Type:
     family = _FAMILY
     rate_header = (_FAMILY, 10)
     rate_header_color = "#000000"
+    rate_hint = (_FAMILY, 8)
+    rate_hint_color = "#888888"
     rate_value = (_FAMILY, 16, "bold")
     rate_value_color = "#000000"
     rate_unit = (_FAMILY, 10)

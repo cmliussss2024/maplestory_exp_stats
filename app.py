@@ -239,7 +239,9 @@ class ExpRateApp:
 
     def clear_current(self) -> None:
         self.current.clear()
-        self._refresh_rates(time.time())
+        now = time.time()
+        self._refresh_rates(now)
+        self._redraw_chart(now)
 
     def clear_session(self) -> None:
         self.session.clear()
@@ -372,9 +374,10 @@ class ExpRateApp:
         self.window.info_section.set_image(photo)
 
     def _redraw_chart(self, now: float) -> None:
+        trackers = {"current": self.current, "session": self.session}
         gain_spec, total_spec = CHARTS
-        gain = self.session.chart_series(now, gain_spec)
-        total = self.session.chart_series(now, total_spec)
+        gain = trackers[gain_spec.source].chart_series(now, gain_spec)
+        total = trackers[total_spec.source].chart_series(now, total_spec)
         gain_key = (tuple(gain), gain_spec.axis_start, gain_spec.suffix)
         total_key = (tuple(total), total_spec.axis_start, total_spec.suffix)
         if gain_key != self._last_gain_series:

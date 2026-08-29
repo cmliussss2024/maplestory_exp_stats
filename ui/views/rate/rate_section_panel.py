@@ -28,6 +28,7 @@ class RateSectionPanel(SectionPanel):
         self.forecast = RateColumnPanel(
             self,
             title="本次",
+            hint="1 分钟无增长则自动重置",
             vars_map=current_vars,
             on_clear=on_clear_current,
             value_unit_gap=Spacing.forecast_value_unit_gap,

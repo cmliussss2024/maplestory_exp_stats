@@ -189,7 +189,7 @@ class ChartSeriesTests(unittest.TestCase):
         tracker = RateTracker()
         tracker.tick(1000, now=0.0)
         tracker.tick(1100, now=1.0)
-        spec = ChartSpec("t", 5, 1.0, "ago", "/秒", "per_sec_rate")
+        spec = ChartSpec("t", 5, 1.0, "ago", "/秒", "per_sec_rate", "current")
         self.assertEqual(tracker.chart_series(5.0, spec), [0, 100, 50, 33, 25])
         self.assertEqual(tracker.hourly_rates(5.0).per_sec, 25)
 
@@ -198,7 +198,7 @@ class ChartSeriesTests(unittest.TestCase):
         tracker.tick(1000, now=0.0)
         tracker.tick(1100, now=1.0)
         tracker.tick(1200, now=5.0)
-        spec = ChartSpec("t", 5, 1.0, "ago", "", "cumulative")
+        spec = ChartSpec("t", 5, 1.0, "ago", "", "cumulative", "session")
         self.assertEqual(tracker.chart_series(5.0, spec), [100, 100, 100, 100, 200])
 
     def test_hourly_cumulative_keeps_total_from_before_the_window(self):

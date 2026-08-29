@@ -48,11 +48,12 @@ class ChartSpec:
     axis_start: str
     suffix: str
     mode: str
+    source: str
 
 
 CHARTS = (
-    ChartSpec("秒均收益（近5分钟）", 300, 1.0, "5分钟前", "/秒", "per_sec_rate"),
-    ChartSpec("累积经验", 60, 60.0, "1小时前", "", "cumulative"),
+    ChartSpec("本次秒均收益", 300, 1.0, "5分钟前", "/秒", "per_sec_rate", "current"),
+    ChartSpec("累计经验", 60, 60.0, "1小时前", "", "cumulative", "session"),
 )
 
 LEVEL_CONFIRM_SECONDS = 10.0

@@ -34,9 +34,6 @@ class Spacing:
     divider_width = 1
     info_cell_spacing = 4
     retry_preview_spacing = 8
-    tab_bar_height = 32
-    tab_radius = 10
-    tab_inset = 1
     chart_title_pad_bottom = 2
     gain_chart_bottom_pad = 6
     total_chart_bottom_pad = 0
@@ -87,14 +84,7 @@ class Type:
     chart_caption = (_FAMILY, 8)
     chart_peak = "#666666"
     chart_axis = "#888888"
-    tab = (_FAMILY, 9)
-    tab_active = (_FAMILY, 9, "bold")
-    tab_text = "#666666"
-    tab_active_text = "#222222"
     divider = "#d9d9d9"
-    tab_track = "#eaeaea"
-    tab_active_bg = "#ffffff"
-    tab_border = "#d9d9d9"
     chart_canvas_bg = "#f7f7f7"
     chart_canvas_border = "#d0d0d0"
     chart_grid = "#e6e6e6"

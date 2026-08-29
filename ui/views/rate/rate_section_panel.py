@@ -27,7 +27,7 @@ class RateSectionPanel(SectionPanel):
         pad = Spacing.section_padding
         self.forecast = RateColumnPanel(
             self,
-            title="预估",
+            title="本次",
             vars_map=current_vars,
             on_clear=on_clear_current,
             value_unit_gap=Spacing.forecast_value_unit_gap,

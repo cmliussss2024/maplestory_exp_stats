@@ -1,6 +1,6 @@
 """UI view components."""
 
-from ui.views.chart import ChartCardPanel, ChartSectionPanel, ChartTabBarCell
+from ui.views.chart import ChartCardPanel, ChartSectionPanel
 from ui.views.exp_rate_window import ExpRateWindow
 from ui.views.hairline import Hairline
 from ui.views.info import InfoRowCell, InfoSectionPanel, RetryRowCell
@@ -13,7 +13,6 @@ from ui.views.section_panel import SectionPanel
 __all__ = [
     "ChartCardPanel",
     "ChartSectionPanel",
-    "ChartTabBarCell",
     "ExpRateWindow",
     "Hairline",
     "InfoRowCell",

@@ -19,8 +19,10 @@ class InfoSectionPanel(SectionPanel):
         master: tk.Misc,
         *,
         current_exp: tk.StringVar,
+        current_percent: tk.StringVar,
         session_exp: tk.StringVar,
         session_time: tk.StringVar,
+        level_eta: tk.StringVar,
         status: tk.StringVar,
         on_retry: Callable[[], None],
         **kwargs: Any,
@@ -28,8 +30,10 @@ class InfoSectionPanel(SectionPanel):
         super().__init__(master, **kwargs)
         rows = (
             ("当前经验", current_exp),
+            ("当前百分比", current_percent),
             ("累计经验", session_exp),
             ("累计时间", session_time),
+            ("预计升级需要时间", level_eta),
             ("状态", status),
         )
         last = len(rows) - 1

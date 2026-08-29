@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 
-from exp_parser import pick_exp
+from exp_parser import ExpReading, pick_exp_reading
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 LABEL_PATH = ASSETS / "exp_label.png"
@@ -124,6 +124,11 @@ def label_present(crop: np.ndarray) -> bool:
 
 
 def read_exp_from_bgr(image_bgr: np.ndarray) -> int | None:
+    reading = read_exp_reading_from_bgr(image_bgr)
+    return None if reading is None else reading.exp
+
+
+def read_exp_reading_from_bgr(image_bgr: np.ndarray) -> ExpReading | None:
     if image_bgr.size == 0:
         return None
     readings: list[tuple[str, float]] = []
@@ -131,7 +136,7 @@ def read_exp_from_bgr(image_bgr: np.ndarray) -> int | None:
         text, conf = _ocr_text(view)
         if text:
             readings.append((text, conf))
-    return pick_exp(readings)
+    return pick_exp_reading(readings)
 
 
 def _text_row(image_bgr: np.ndarray) -> np.ndarray:

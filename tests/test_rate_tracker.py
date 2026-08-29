@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rate_tracker import ExpPoint, RateTracker, Rates, sanitize_exp_series
+from rate_tracker import CHARTS, ChartSpec, ExpPoint, RateTracker, Rates, sanitize_exp_series
 
 
 class HourlyRateTests(unittest.TestCase):
@@ -181,29 +181,34 @@ class HistoryPersistTests(unittest.TestCase):
 class ChartSeriesTests(unittest.TestCase):
     def test_empty_chart_series_are_zeros(self):
         tracker = RateTracker()
-        self.assertEqual(tracker.chart_rate_series(10.0, 2.0, 1.0, 1.0), [0, 0, 0])
-        self.assertEqual(tracker.cumulative_series(10.0, 2.0, 1.0), [0, 0, 0])
+        per_sec, hourly = CHARTS
+        self.assertEqual(tracker.chart_series(10.0, per_sec), [0] * per_sec.count)
+        self.assertEqual(tracker.chart_series(10.0, hourly), [0] * hourly.count)
 
-    def test_chart_rate_series_uses_hourly_income_since_first_gain(self):
+    def test_step_gain_series_is_that_seconds_gain_and_pads_left(self):
         tracker = RateTracker()
         tracker.tick(1000, now=0.0)
-        tracker.tick(1100, now=1.0)
-        series = tracker.chart_rate_series(10.0, span=5.0, step=1.0, target=1.0)
-        self.assertEqual(series[-1], 11)
+        tracker.tick(1100, now=8.0)
+        spec = ChartSpec("t", 5, 1.0, "ago", "/秒", "step_gain")
+        self.assertEqual(tracker.chart_series(10.0, spec), [0, 0, 100, 0, 0])
 
-    def test_cumulative_series_tracks_total_since_first_gain(self):
+    def test_cumulative_series_is_session_total_at_each_sample(self):
         tracker = RateTracker()
         tracker.tick(1000, now=0.0)
         tracker.tick(1100, now=1.0)
         tracker.tick(1200, now=5.0)
-        series = tracker.cumulative_series(10.0, span=5.0, step=1.0)
-        self.assertEqual(series[-1], 200)
+        spec = ChartSpec("t", 5, 1.0, "ago", "", "cumulative")
+        self.assertEqual(tracker.chart_series(5.0, spec), [100, 100, 100, 100, 200])
 
-    def test_chart_axis_start_label_switches_to_beginning(self):
+    def test_hourly_cumulative_keeps_total_from_before_the_window(self):
         tracker = RateTracker()
-        tracker.tick(1000, now=0.0)
-        tracker.tick(1100, now=8.0)
-        self.assertEqual(tracker.chart_axis_start_label(10.0, 5.0, "5分钟前"), "开始")
+        tracker.tick(100_000, now=0.0)
+        tracker.tick(150_000, now=1.0)
+        tracker.tick(250_000, now=3601.0)
+        series = tracker.chart_series(3601.0, CHARTS[1])
+        self.assertEqual(len(series), 60)
+        self.assertEqual(series[0], 50_000)
+        self.assertEqual(series[-1], 150_000)
 
 
 class OcrRecoveryTests(unittest.TestCase):

@@ -16,7 +16,7 @@ import cv2
 from PIL import Image, ImageTk
 
 from locator import Locator, LocatorState
-from rate_tracker import CHART_TABS, RATE_ROWS, RateTracker, Rates
+from rate_tracker import CHARTS, RATE_ROWS, RateTracker, Rates, eta_to_level
 from ui import ExpRateWindow, WINDOW_PATH, paint_chart
 from ui.drawing import fit_image
 from ui.styles import Spacing, Type
@@ -28,7 +28,7 @@ from vision import (
     grab_region,
     label_present,
     label_rect_to_ocr_rect,
-    read_exp_from_bgr,
+    read_exp_reading_from_bgr,
     to_virtual_rect,
     warmup,
 )
@@ -36,7 +36,6 @@ from vision import (
 from window_position import load_window_position, save_window_position
 
 HISTORY_PATH = Path(__file__).resolve().parent / "data" / "exp_history.jsonl"
-DEFAULT_CHART_TAB = 0
 LOCK_SCAN_MS = 1000
 SEARCH_SCAN_MS = Locator.SEARCH_INTERVAL_SECONDS * 1000
 
@@ -52,6 +51,12 @@ def _fmt(value: int | None) -> str:
     if value is None:
         return "—"
     return f"{value:,}"
+
+
+def _fmt_percent(value: float | None) -> str:
+    if value is None:
+        return "—"
+    return f"{value:.2f}%"
 
 
 def _fmt_duration(seconds: float | None) -> str:
@@ -77,6 +82,7 @@ class ExpRateApp:
         self._busy = False
         self._closed = False
         self._last_exp: int | None = None
+        self._last_percent: float | None = None
         self._window_placed = False
         self._tick_job: str | None = None
         self._ui_job: str | None = None
@@ -90,35 +96,31 @@ class ExpRateApp:
         self.current_vars = {key: tk.StringVar(value="0") for key, _label in RATE_ROWS}
         self.session_vars = {key: tk.StringVar(value="0") for key, _label in RATE_ROWS}
         self.current_exp = tk.StringVar(value="—")
+        self.current_percent = tk.StringVar(value="—")
         self.session_exp = tk.StringVar(value="0")
         self.session_time = tk.StringVar(value="—")
+        self.level_eta = tk.StringVar(value="—")
         self.status = tk.StringVar(value=STATUS_TEXT[LocatorState.SEARCHING])
-        self._chart_span = CHART_TABS[DEFAULT_CHART_TAB][1]
-        self._chart_step = CHART_TABS[DEFAULT_CHART_TAB][2]
-        self._chart_ago = CHART_TABS[DEFAULT_CHART_TAB][3]
-        self._chart_gain_suffix = CHART_TABS[DEFAULT_CHART_TAB][4]
-        self._chart_rate_target = CHART_TABS[DEFAULT_CHART_TAB][5]
-        self._chart_tab_index = DEFAULT_CHART_TAB
 
         self.window = ExpRateWindow(
             root,
             current_vars=self.current_vars,
             session_vars=self.session_vars,
             current_exp=self.current_exp,
+            current_percent=self.current_percent,
             session_exp=self.session_exp,
             session_time=self.session_time,
+            level_eta=self.level_eta,
             status=self.status,
             on_clear_current=self.clear_current,
             on_clear_session=self.clear_session,
             on_retry=self.retry,
-            on_tab_select=self._select_chart_tab,
             on_float=self.enter_float,
         )
         self.retry_btn = self.window.retry_row.button
         self.status_label = self.window.info_section.status_label
         self.gain_chart = self.window.chart_section.gain_chart
         self.total_chart = self.window.chart_section.total_chart
-        self.window.chart_section.draw_tabs(DEFAULT_CHART_TAB)
 
         self._restore_position()
         self.root.after_idle(self.window.rate_section.sync_divider)
@@ -262,8 +264,20 @@ class ExpRateApp:
     def _refresh_rates(self, now: float) -> None:
         self._apply_column(self.current_vars, self.current.hourly_rates(now))
         self._apply_column(self.session_vars, self.session.hourly_rates(now))
+        self.current_percent.set(_fmt_percent(self._last_percent))
         self.session_exp.set(_fmt(self.session.total_gained()))
-        self.session_time.set(_fmt_duration(self.session.elapsed_since_first_gain(now)))
+        elapsed = self.session.elapsed_since_first_gain(now)
+        self.session_time.set(_fmt_duration(elapsed))
+        self.level_eta.set(
+            _fmt_duration(
+                eta_to_level(
+                    self._last_exp,
+                    self._last_percent,
+                    self.session.total_gained(),
+                    elapsed,
+                )
+            )
+        )
 
     def _ui_tick(self) -> None:
         if self._closed or not self.root.winfo_exists():
@@ -324,11 +338,16 @@ class ExpRateApp:
 
     def _consume_crop(self, crop, now: float) -> None:
         self._update_preview(crop)
-        exp = read_exp_from_bgr(crop)
+        reading = read_exp_reading_from_bgr(crop)
+        exp = None if reading is None else reading.exp
         self.current.tick(exp, now)
         self.session.tick(exp, now)
-        if exp is not None:
-            self._last_exp = exp
+        if reading is not None:
+            if reading.percent is not None:
+                self._last_percent = reading.percent
+            elif self._last_exp is not None and reading.exp < self._last_exp:
+                self._last_percent = None
+            self._last_exp = reading.exp
         elif self.session.last_exp is not None:
             self._last_exp = self.session.last_exp
         elif self.current.last_exp is not None:
@@ -352,52 +371,31 @@ class ExpRateApp:
         photo = ImageTk.PhotoImage(image)
         self.window.info_section.set_image(photo)
 
-    def _select_chart_tab(self, index: int) -> None:
-        if index == self._chart_tab_index:
-            return
-        self._chart_tab_index = index
-        self._last_gain_series = None
-        self._last_total_series = None
-        self.window.chart_section.draw_tabs(index)
-        _label, span, step, ago, gain_suffix, rate_target, gain_title = CHART_TABS[index]
-        self._chart_span = span
-        self._chart_step = step
-        self._chart_ago = ago
-        self._chart_gain_suffix = gain_suffix
-        self._chart_rate_target = rate_target
-        self.window.chart_section.set_gain_title(gain_title)
-        self._redraw_chart(time.time())
-
     def _redraw_chart(self, now: float) -> None:
-        axis_start = self.session.chart_axis_start_label(now, self._chart_span, self._chart_ago)
-        gain = self.session.chart_rate_series(
-            now,
-            span=self._chart_span,
-            step=self._chart_step,
-            target=self._chart_rate_target,
-        )
-        total = self.session.cumulative_series(now, span=self._chart_span, step=self._chart_step)
-        gain_key = (tuple(gain), axis_start, self._chart_gain_suffix)
-        total_key = (tuple(total), axis_start)
+        gain_spec, total_spec = CHARTS
+        gain = self.session.chart_series(now, gain_spec)
+        total = self.session.chart_series(now, total_spec)
+        gain_key = (tuple(gain), gain_spec.axis_start, gain_spec.suffix)
+        total_key = (tuple(total), total_spec.axis_start, total_spec.suffix)
         if gain_key != self._last_gain_series:
             self._last_gain_series = gain_key
             paint_chart(
                 self.gain_chart,
                 gain,
-                suffix=self._chart_gain_suffix,
+                suffix=gain_spec.suffix,
                 line=Type.gain_line,
                 fill=Type.gain_fill,
-                axis_start=axis_start,
+                axis_start=gain_spec.axis_start,
             )
         if total_key != self._last_total_series:
             self._last_total_series = total_key
             paint_chart(
                 self.total_chart,
                 total,
-                suffix="",
+                suffix=total_spec.suffix,
                 line=Type.total_line,
                 fill=Type.total_fill,
-                axis_start=axis_start,
+                axis_start=total_spec.axis_start,
             )
 
 

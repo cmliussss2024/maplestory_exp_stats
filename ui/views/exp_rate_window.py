@@ -21,13 +21,14 @@ class ExpRateWindow:
         current_vars: dict[str, tk.StringVar],
         session_vars: dict[str, tk.StringVar],
         current_exp: tk.StringVar,
+        current_percent: tk.StringVar,
         session_exp: tk.StringVar,
         session_time: tk.StringVar,
+        level_eta: tk.StringVar,
         status: tk.StringVar,
         on_clear_current: Callable[[], None],
         on_clear_session: Callable[[], None],
         on_retry: Callable[[], None],
-        on_tab_select: Callable[[int], None],
         on_float: Callable[[], None],
     ) -> None:
         root.columnconfigure(0, weight=1)
@@ -51,8 +52,10 @@ class ExpRateWindow:
         self.info_section = InfoSectionPanel(
             root,
             current_exp=current_exp,
+            current_percent=current_percent,
             session_exp=session_exp,
             session_time=session_time,
+            level_eta=level_eta,
             status=status,
             on_retry=on_retry,
         )
@@ -61,8 +64,5 @@ class ExpRateWindow:
 
         Hairline(root).grid(row=5, column=0, sticky="ew")
 
-        self.chart_section = ChartSectionPanel(
-            root,
-            on_tab_select=on_tab_select,
-        )
+        self.chart_section = ChartSectionPanel(root)
         self.chart_section.grid(row=6, column=0, sticky="ew")

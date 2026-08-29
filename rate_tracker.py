@@ -38,9 +38,21 @@ RATE_ROWS = (
     ("per_hour", "/时"),
 )
 
-CHART_TABS = (
-    ("5分", 300.0, 1.0, "5分钟前", "/秒", 1.0, "秒均收益"),
-    ("1小时", 3600.0, 60.0, "1小时前", "/分", 60.0, "分均收益"),
+
+# Keep in sync with docs/charts.md
+@dataclass(frozen=True)
+class ChartSpec:
+    title: str
+    count: int
+    step: float
+    axis_start: str
+    suffix: str
+    mode: str
+
+
+CHARTS = (
+    ChartSpec("5分钟内秒均收益", 300, 1.0, "5分钟前", "/秒", "step_gain"),
+    ChartSpec("1小时累计经验", 60, 60.0, "1小时前", "", "cumulative"),
 )
 
 LEVEL_CONFIRM_SECONDS = 10.0
@@ -251,72 +263,41 @@ class RateTracker:
         self._first_gain_at = result.first_gain_at
         self._last_gain_at = result.last_gain_at
 
-    def chart_rate_series(
-        self,
-        now: float,
-        span: float,
-        step: float,
-        target: float,
-    ) -> list[int]:
-        return self._since_first_gain_series(now, span, step, target=target)
-
-    def cumulative_series(
-        self,
-        now: float,
-        span: float,
-        step: float,
-    ) -> list[int]:
-        return self._since_first_gain_series(now, span, step, target=None)
-
-    def chart_axis_start_label(self, now: float, span: float, default: str) -> str:
-        if self._first_gain_at is None or self._first_gain_at > now - span:
-            return "开始" if self._first_gain_at is not None else default
-        return default
-
-    def _since_first_gain_series(
-        self,
-        now: float,
-        span: float,
-        step: float,
-        target: float | None,
-    ) -> list[int]:
+    def chart_series(self, now: float, spec: ChartSpec) -> list[int]:
         self._refresh(now)
-        sample_times = self._sample_times(now, span, step)
-        if self._first_gain_at is None:
-            return [0] * len(sample_times)
+        times = [now - (spec.count - 1 - i) * spec.step for i in range(spec.count)]
+        if spec.mode == "step_gain":
+            return self._step_gain_values(times, spec.step)
+        return self._cumulative_values(times)
 
-        running = 0
-        gain_idx = 0
+    def _step_gain_values(self, times: list[float], step: float) -> list[int]:
         gains = list(self._gains)
+        idx = 0
         values: list[int] = []
-        for sample in sample_times:
-            while gain_idx < len(gains) and gains[gain_idx][0] <= sample:
-                ts, delta = gains[gain_idx]
-                if ts >= self._first_gain_at:
-                    running += delta
-                gain_idx += 1
-            if target is None:
-                values.append(running)
-                continue
-            if running <= 0 or sample <= self._first_gain_at:
-                values.append(0)
-                continue
-            elapsed = max(sample - self._first_gain_at, 1.0)
-            values.append(int(round(running * target / elapsed)))
+        for sample in times:
+            lo = sample - step
+            while idx < len(gains) and gains[idx][0] <= lo:
+                idx += 1
+            total = 0
+            cursor = idx
+            while cursor < len(gains) and gains[cursor][0] <= sample:
+                total += gains[cursor][1]
+                cursor += 1
+            values.append(total)
+            idx = cursor
         return values
 
-    def _sample_times(self, now: float, span: float, step: float) -> list[float]:
-        start = now - span
-        if self._first_gain_at is not None:
-            start = max(start, self._first_gain_at)
-        sample = start
-        times: list[float] = []
-        while sample <= now + 1e-9:
-            times.append(sample)
-            sample += step
-        if not times:
-            times.append(now)
-        return times
+    def _cumulative_values(self, times: list[float]) -> list[int]:
+        gains = list(self._gains)
+        idx = 0
+        running = 0
+        values: list[int] = []
+        for sample in times:
+            while idx < len(gains) and gains[idx][0] <= sample:
+                running += gains[idx][1]
+                idx += 1
+            values.append(running)
+        return values
 
     def _append_history(self, now: float, exp: int) -> None:
         if self.history_path is None:
@@ -351,3 +332,21 @@ class RateTracker:
             gap = time.time() - last_t
             if gap > 0:
                 self._paused = gap
+
+
+def eta_to_level(
+    current_exp: int | None,
+    percent: float | None,
+    gained: int,
+    elapsed: float | None,
+) -> float | None:
+    if current_exp is None or current_exp <= 0:
+        return None
+    if percent is None or percent <= 0:
+        return None
+    if elapsed is None or elapsed <= 0 or gained <= 0:
+        return None
+    remaining = current_exp * (100.0 - percent) / percent
+    if remaining <= 0:
+        return 0.0
+    return remaining * elapsed / gained

@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from paths import data_dir
 
-WINDOW_PATH = Path(__file__).resolve().parent.parent / "data" / "window.json"
+WINDOW_PATH = data_dir() / "window.json"

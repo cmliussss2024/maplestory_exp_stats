@@ -8,15 +8,16 @@ from dpi import disable_per_monitor_dpi
 
 disable_per_monitor_dpi()
 
+import math
 import time
 import tkinter as tk
-from pathlib import Path
 
 import cv2
 from PIL import Image, ImageTk
 
 from locator import Locator, LocatorState
 from exp_parser import ExpReading
+from paths import data_dir
 from rate_tracker import CHARTS, RATE_ROWS, RateTracker, Rates, eta_to_level
 from ui import ExpRateWindow, WINDOW_PATH, paint_chart
 from ui.drawing import fit_image
@@ -36,7 +37,7 @@ from vision import (
 
 from window_position import load_window_position, save_window_position
 
-HISTORY_PATH = Path(__file__).resolve().parent / "data" / "exp_history.jsonl"
+HISTORY_PATH = data_dir() / "exp_history.jsonl"
 LOCK_SCAN_MS = 1000
 SEARCH_SCAN_MS = Locator.SEARCH_INTERVAL_SECONDS * 1000
 
@@ -69,7 +70,7 @@ def _fmt_percent(value: float | None) -> str:
 
 def _fmt_duration(seconds: float | None) -> str:
     if seconds is None:
-        return "—"
+        return "-"
     total = int(seconds)
     hours, rem = divmod(total, 3600)
     minutes, secs = divmod(rem, 60)
@@ -91,9 +92,12 @@ class ExpRateApp:
         self._closed = False
         self._last_exp: int | None = None
         self._last_percent: float | None = None
+        self._eta_exp: int | None = None
+        self._eta_percent: float | None = None
         self._window_placed = False
         self._tick_job: str | None = None
         self._ui_job: str | None = None
+        self._scan_due_at = 0.0
         self._save_pos_job: str | None = None
         self._last_saved_pos: tuple[int, int] | None = None
         self._last_gain_series: tuple | None = None
@@ -105,10 +109,11 @@ class ExpRateApp:
         self.current_exp = tk.StringVar(value="-")
         self.current_percent = tk.StringVar(value="-")
         self.session_exp = tk.StringVar(value="0")
-        self.session_time = tk.StringVar(value="—")
+        self.session_time = tk.StringVar(value="-")
         self.session_rate = tk.StringVar(value="0")
         self.level_eta = tk.StringVar(value="-")
         self.status = tk.StringVar(value=STATUS_TEXT[LocatorState.SEARCHING])
+        self.status_detail = tk.StringVar(value="")
 
         self.window = ExpRateWindow(
             root,
@@ -120,6 +125,7 @@ class ExpRateApp:
             session_rate=self.session_rate,
             level_eta=self.level_eta,
             status=self.status,
+            status_detail=self.status_detail,
             on_clear_current=self.clear_current,
             on_clear_session=self.clear_session,
             on_retry=self.retry,
@@ -137,6 +143,8 @@ class ExpRateApp:
         now = time.time()
         self._refresh_rates(now)
         self._redraw_chart(now)
+        self._scan_due_at = now + 0.2
+        self._refresh_status()
         self._tick_job = self.root.after(200, self.tick)
         self._ui_job = self.root.after(1000, self._ui_tick)
 
@@ -252,17 +260,31 @@ class ExpRateApp:
         self._refresh_rates(time.time())
         self._redraw_chart(time.time())
 
+    def _status_detail(self, now: float | None = None) -> str:
+        state = self.locator.state
+        if state not in (LocatorState.SEARCHING, LocatorState.RELOCATING):
+            return ""
+        if now is None:
+            now = time.time()
+        left = max(0, math.ceil(self._scan_due_at - now))
+        retries = min(self.locator.search_misses, Locator.SEARCH_FAIL_LIMIT)
+        return f"({retries}/{Locator.SEARCH_FAIL_LIMIT}, {left}s)"
+
+    def _scan_delay_ms(self) -> int:
+        if self.locator.state == LocatorState.LOCKED:
+            return LOCK_SCAN_MS
+        return SEARCH_SCAN_MS
+
     def _refresh_status(self) -> None:
         state = self.locator.state
         self.status.set(STATUS_TEXT[state])
+        self.status_detail.set(self._status_detail())
         self.status_label.configure(foreground=STATUS_COLOR[state])
         if state == LocatorState.FAILED:
             self.retry_btn.configure(state="normal")
         else:
             self.retry_btn.configure(state="disabled")
-        self.window.info_section.set_preview_visible(
-            state not in (LocatorState.SEARCHING, LocatorState.RELOCATING)
-        )
+        self.window.info_section.set_preview_visible(state == LocatorState.LOCKED)
 
     def _apply_column(self, vars_map: dict[str, tk.StringVar], rates: Rates) -> None:
         vars_map["per_sec"].set(_fmt(rates.per_sec))
@@ -279,12 +301,12 @@ class ExpRateApp:
         self.session_time.set(_fmt_duration(self.session.elapsed_since_first_gain(now)))
         current_elapsed = self.current.elapsed_since_first_gain(now)
         eta = eta_to_level(
-            self._last_exp,
-            self._last_percent,
+            self._eta_exp,
+            self._eta_percent,
             self.current.total_gained(),
             current_elapsed,
         )
-        self.level_eta.set("-" if eta is None else _fmt_duration(eta))
+        self.level_eta.set(_fmt_duration(eta))
 
     def _ui_tick(self) -> None:
         if self._closed or not self.root.winfo_exists():
@@ -293,17 +315,16 @@ class ExpRateApp:
         self.current.clear_if_idle(now)
         self._refresh_rates(now)
         self._redraw_chart(now)
+        if self.locator.state in (LocatorState.SEARCHING, LocatorState.RELOCATING):
+            self._refresh_status()
         self._ui_job = self.root.after(1000, self._ui_tick)
 
     def tick(self) -> None:
         if self._closed or not self.root.winfo_exists():
             return
-        delay = (
-            LOCK_SCAN_MS
-            if self.locator.state == LocatorState.LOCKED
-            else SEARCH_SCAN_MS
-        )
         if self._busy:
+            delay = self._scan_delay_ms()
+            self._scan_due_at = time.time() + delay / 1000
             self._tick_job = self.root.after(delay, self.tick)
             return
         self._busy = True
@@ -315,6 +336,8 @@ class ExpRateApp:
             self._busy = False
             if self._closed or not self.root.winfo_exists():
                 return
+            delay = self._scan_delay_ms()
+            self._scan_due_at = time.time() + delay / 1000
             self._refresh_status()
             self._tick_job = self.root.after(delay, self.tick)
 
@@ -358,6 +381,8 @@ class ExpRateApp:
             return
         self._last_exp = reading.exp
         self._last_percent = reading.percent
+        self._eta_exp = reading.exp
+        self._eta_percent = reading.percent
 
     def _consume_crop(self, crop, now: float) -> None:
         self._update_preview(crop)
@@ -412,11 +437,30 @@ class ExpRateApp:
             )
 
 
+def _report_crash(exc: BaseException) -> None:
+    import traceback
+
+    log = data_dir() / "crash.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(traceback.format_exc(), encoding="utf-8")
+    text = f"{exc}\n\n详情已写入:\n{log}"
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(0, text, "冒险岛经验统计助手", 0x10)
+    except Exception:
+        pass
+
+
 def main() -> None:
-    warmup()
-    root = tk.Tk()
-    ExpRateApp(root)
-    root.mainloop()
+    try:
+        warmup()
+        root = tk.Tk()
+        ExpRateApp(root)
+        root.mainloop()
+    except Exception as exc:
+        _report_crash(exc)
+        raise
 
 
 if __name__ == "__main__":

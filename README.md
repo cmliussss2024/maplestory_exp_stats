@@ -7,6 +7,18 @@
 
 ![主窗口](photos/demo-main.jpg)
 
+## 绿色版
+
+开发机装好依赖后：
+
+```
+python scripts/pack.py
+```
+
+产物在 `dist/MapleStoryExpStats/`。把整个文件夹拷走，双击 `MapleStoryExpStats.exe` 即可，不需要安装 Python。`data/`（窗口位置、经验历史）写在 exe 旁边。
+
+需要 Windows 10 1803+。体积大约几百 MB（含 OCR 模型）。
+
 ## 免责说明
 
 本项目是**非官方**第三方工具，与 Nexon、盛大、完美及任何《冒险岛》运营方无关，未获授权。

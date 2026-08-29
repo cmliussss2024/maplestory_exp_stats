@@ -21,6 +21,7 @@ class InfoSectionPanel(SectionPanel):
         current_exp: tk.StringVar,
         current_percent: tk.StringVar,
         status: tk.StringVar,
+        status_detail: tk.StringVar,
         on_retry: Callable[[], None],
         **kwargs: Any,
     ) -> None:
@@ -32,7 +33,12 @@ class InfoSectionPanel(SectionPanel):
         )
         last = len(rows) - 1
         for index, (caption, var) in enumerate(rows):
-            row = InfoRowCell(self.content, caption=caption, variable=var)
+            row = InfoRowCell(
+                self.content,
+                caption=caption,
+                variable=var,
+                detail=status_detail if caption == "状态" else None,
+            )
             row.pack(fill="x", pady=(0, Spacing.Info.cell_spacing) if index < last else 0)
             if caption == "状态":
                 self.status_label = row.value_label
@@ -49,24 +55,33 @@ class InfoSectionPanel(SectionPanel):
             highlightthickness=0,
             bd=0,
         )
+        self.image_canvas.pack(pady=(Spacing.Info.retry_preview_spacing, 0))
         self._photo: tk.PhotoImage | None = None
         self._image_id: int | None = None
+        self._preview_visible = False
 
     def set_preview_visible(self, visible: bool) -> None:
-        mapped = bool(self.image_canvas.winfo_manager())
-        if visible and not mapped:
-            self.image_canvas.pack(pady=(Spacing.Info.retry_preview_spacing, 0))
-        elif not visible and mapped:
-            self.image_canvas.pack_forget()
+        self._preview_visible = visible
+        if self._image_id is not None:
+            self.image_canvas.itemconfigure(
+                self._image_id,
+                state="normal" if visible else "hidden",
+            )
 
     def set_image(self, photo: tk.PhotoImage) -> None:
+        state = "normal" if self._preview_visible else "hidden"
         if self._image_id is None:
             self._image_id = self.image_canvas.create_image(
                 Spacing.Info.preview_width // 2,
                 Spacing.Info.preview_height // 2,
                 image=photo,
                 anchor="center",
+                state=state,
             )
         else:
-            self.image_canvas.itemconfigure(self._image_id, image=photo)
+            self.image_canvas.itemconfigure(
+                self._image_id,
+                image=photo,
+                state=state,
+            )
         self._photo = photo

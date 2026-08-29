@@ -18,6 +18,7 @@ class InfoRowCell(Panel):
         *,
         caption: str,
         variable: tk.StringVar,
+        detail: tk.StringVar | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
@@ -27,10 +28,17 @@ class InfoRowCell(Panel):
             font=Type.Info.label,
             foreground=Type.Info.label_color,
         ).pack(side="left")
+        if detail is not None:
+            ttk.Label(
+                self,
+                textvariable=detail,
+                font=Type.Info.detail,
+                foreground=Type.Info.detail_color,
+            ).pack(side="right")
         self.value_label = ttk.Label(
             self,
             textvariable=variable,
             font=Type.Info.value,
             foreground=Type.Info.value_color,
         )
-        self.value_label.pack(side="right")
+        self.value_label.pack(side="right", padx=(0, 4) if detail is not None else 0)

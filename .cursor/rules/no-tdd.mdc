@@ -11,5 +11,5 @@ This project prefers speed over test-first ceremony. **User instructions overrid
 - Do **not** write a failing test before changing production code.
 - Change the implementation first. Skip “watch the test fail” loops.
 - Do not add new tests unless asked.
-- If an existing test breaks because of the change, update that test after the code change — do not start with the test.
+- If an existing test breaks because of the change, update that test after the code change - do not start with the test.
 - Do not delay a small tweak (constants, crop, copy, layout) for test scaffolding.

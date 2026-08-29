@@ -1,6 +1,6 @@
 ---
 description: 经验条三张图以 docs/assets.md 为准；固定文件名，不要把经验写进文件名
-globs: docs/assets.md, assets/**/*.png, vision.py, scripts/crop_exp_assets.py, tests/test_vision.py
+globs: docs/assets.md, assets/**/*.png, paths.py, vision.py, scripts/crop_exp_assets.py, tests/test_vision.py
 alwaysApply: false
 ---
 

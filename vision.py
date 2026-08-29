@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -15,8 +14,9 @@ import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 
 from exp_parser import ExpReading, pick_exp_reading
+from paths import assets_dir
 
-ASSETS = Path(__file__).resolve().parent / "assets"
+ASSETS = assets_dir()
 LABEL_PATH = ASSETS / "exp_label.png"
 
 # Locked crop relative to the EXP label: tight around text + yellow-green slot.

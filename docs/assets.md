@@ -1,8 +1,8 @@
 # 经验条图片资源
 
-本文档是 `assets/` 三张图的规格。改文件名、裁剪范围或用途时先改本文档，再改 `scripts/crop_exp_assets.py`、`vision.py` 与 `tests/test_vision.py`。
+本文档是 `assets/` 三张图的规格。改文件名、裁剪范围或用途时先改本文档，再改 `scripts/crop_exp_assets.py`、`paths.py`、`vision.py` 与 `tests/test_vision.py`。
 
-运行时**只读** `exp_label.png`。另外两张是裁剪样张和测试夹具，程序不会加载。
+运行时**只读** `exp_label.png`。另外两张是裁剪样张和测试夹具，程序不会加载。路径由 `paths.assets_dir()` 解析：源码下是仓库 `assets/`，绿色版是包内 `_internal/assets/`。
 
 ## 文件名
 

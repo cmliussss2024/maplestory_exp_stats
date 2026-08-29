@@ -26,6 +26,7 @@ class ExpRateWindow:
         session_rate: tk.StringVar,
         level_eta: tk.StringVar,
         status: tk.StringVar,
+        status_detail: tk.StringVar,
         on_clear_current: Callable[[], None],
         on_clear_session: Callable[[], None],
         on_retry: Callable[[], None],
@@ -60,6 +61,7 @@ class ExpRateWindow:
             current_exp=current_exp,
             current_percent=current_percent,
             status=status,
+            status_detail=status_detail,
             on_retry=on_retry,
         )
         self.info_section.grid(row=4, column=0, sticky="ew")

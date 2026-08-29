@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
-LOG_PATH = Path(__file__).resolve().parent.parent / "data" / "overlay-debug.log"
+from paths import data_dir
+
+LOG_PATH = data_dir() / "overlay-debug.log"
 
 
 def overlay_log(event: str, **fields: object) -> None:

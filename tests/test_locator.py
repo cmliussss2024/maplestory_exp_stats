@@ -17,7 +17,7 @@ class LocatorTests(unittest.TestCase):
 
     def test_search_misses_fail_after_limit(self):
         loc = Locator()
-        for _ in range(Locator.SEARCH_FAIL_LIMIT):
+        for _ in range(1 + Locator.SEARCH_FAIL_LIMIT):
             loc.on_search_result(None)
         self.assertEqual(loc.state, LocatorState.FAILED)
 
@@ -43,7 +43,7 @@ class LocatorTests(unittest.TestCase):
         loc.on_lock_check(False)
         loc.on_lock_check(False)
         loc.on_lock_check(False)
-        for _ in range(Locator.SEARCH_FAIL_LIMIT):
+        for _ in range(1 + Locator.SEARCH_FAIL_LIMIT):
             loc.on_search_result(None)
         self.assertEqual(loc.state, LocatorState.FAILED)
 
@@ -59,7 +59,7 @@ class LocatorTests(unittest.TestCase):
 
     def test_retry_from_failed_starts_searching(self):
         loc = Locator()
-        for _ in range(Locator.SEARCH_FAIL_LIMIT):
+        for _ in range(1 + Locator.SEARCH_FAIL_LIMIT):
             loc.on_search_result(None)
         loc.retry()
         self.assertEqual(loc.state, LocatorState.SEARCHING)

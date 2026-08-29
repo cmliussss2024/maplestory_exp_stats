@@ -4,9 +4,13 @@ __pycache__/
 venv/
 .env
 
+build/
+dist/
+
 data/exp_history.jsonl
 data/window.json
 data/overlay-debug.log
+data/crash.log
 
 Thumbs.db
 Desktop.ini

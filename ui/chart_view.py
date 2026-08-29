@@ -9,7 +9,7 @@ from ui.styles import Spacing, Type
 
 def fmt_value(value: int | None) -> str:
     if value is None:
-        return "—"
+        return "-"
     return f"{value:,}"
 
 

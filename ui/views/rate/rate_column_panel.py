@@ -14,9 +14,9 @@ from ui.views.panel import Panel
 from ui.views.rate.rate_row_cell import RateRowCell
 
 _CAPTIONS = {
-    "per_sec": "即时",
-    "per_min": "分钟",
-    "per_5min": "5分钟",
+    "per_sec": "秒",
+    "per_min": "分",
+    "per_5min": "5分",
     "per_hour": "小时",
 }
 
@@ -37,7 +37,7 @@ class RateColumnPanel(Panel):
         ttk.Button(header, text="浮窗", command=on_float).pack(side="right")
         ttk.Label(
             header,
-            text="效率",
+            text="收益",
             font=Type.Rate.header,
             foreground=Type.Rate.header_color,
         ).pack(side="left")

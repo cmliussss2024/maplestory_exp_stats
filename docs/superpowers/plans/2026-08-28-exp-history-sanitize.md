@@ -20,8 +20,8 @@
 
 ## File Structure
 
-- Modify: `rate_tracker.py` — add `ExpPoint`, `SanitizedExp`, `sanitize_exp_series`; move `_is_inflated_baseline` / `_is_truncated_expansion` / `_plausible_gain` to module-level functions used by the sanitizer; `RateTracker` holds `_points`, persists `{t, exp}`, calls sanitizer.
-- Modify: `tests/test_rate_tracker.py` — new sanitizer / persist tests; update `d` assertions and the confirmed level-up total (`5240`); replace `_last_exp` hack with a raw inflated-baseline series.
+- Modify: `rate_tracker.py` - add `ExpPoint`, `SanitizedExp`, `sanitize_exp_series`; move `_is_inflated_baseline` / `_is_truncated_expansion` / `_plausible_gain` to module-level functions used by the sanitizer; `RateTracker` holds `_points`, persists `{t, exp}`, calls sanitizer.
+- Modify: `tests/test_rate_tracker.py` - new sanitizer / persist tests; update `d` assertions and the confirmed level-up total (`5240`); replace `_last_exp` hack with a raw inflated-baseline series.
 
 ---
 

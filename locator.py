@@ -21,6 +21,10 @@ class Locator:
         self._search_misses = 0
         self._lock_misses = 0
 
+    @property
+    def search_misses(self) -> int:
+        return self._search_misses
+
     def on_search_result(self, rect: tuple[int, int, int, int] | None) -> None:
         if self.state not in (LocatorState.SEARCHING, LocatorState.RELOCATING):
             return
@@ -31,7 +35,7 @@ class Locator:
             self._lock_misses = 0
             return
         self._search_misses += 1
-        if self._search_misses >= self.SEARCH_FAIL_LIMIT:
+        if self._search_misses > self.SEARCH_FAIL_LIMIT:
             self.state = LocatorState.FAILED
             self.locked_rect = None
 

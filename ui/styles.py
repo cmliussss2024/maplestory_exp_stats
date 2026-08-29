@@ -117,6 +117,8 @@ class Type:
         label_color = Color.primary
         value = (_FAMILY, 13, "bold")
         value_color = Color.primary
+        detail = (_FAMILY, 10)
+        detail_color = Color.tertiary
         status_ok = "#2e7d32"
         status_search = "#e6a817"
         status_error = "#c62828"

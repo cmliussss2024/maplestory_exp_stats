@@ -185,12 +185,13 @@ class ChartSeriesTests(unittest.TestCase):
         self.assertEqual(tracker.chart_series(10.0, per_sec), [0] * per_sec.count)
         self.assertEqual(tracker.chart_series(10.0, hourly), [0] * hourly.count)
 
-    def test_step_gain_series_is_that_seconds_gain_and_pads_left(self):
+    def test_per_sec_rate_matches_session_average_and_falls_while_idle(self):
         tracker = RateTracker()
         tracker.tick(1000, now=0.0)
-        tracker.tick(1100, now=8.0)
-        spec = ChartSpec("t", 5, 1.0, "ago", "/秒", "step_gain")
-        self.assertEqual(tracker.chart_series(10.0, spec), [0, 0, 100, 0, 0])
+        tracker.tick(1100, now=1.0)
+        spec = ChartSpec("t", 5, 1.0, "ago", "/秒", "per_sec_rate")
+        self.assertEqual(tracker.chart_series(5.0, spec), [0, 100, 50, 33, 25])
+        self.assertEqual(tracker.hourly_rates(5.0).per_sec, 25)
 
     def test_cumulative_series_is_session_total_at_each_sample(self):
         tracker = RateTracker()

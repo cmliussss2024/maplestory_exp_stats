@@ -51,8 +51,8 @@ class ChartSpec:
 
 
 CHARTS = (
-    ChartSpec("5分钟内秒均收益", 300, 1.0, "5分钟前", "/秒", "step_gain"),
-    ChartSpec("1小时累计经验", 60, 60.0, "1小时前", "", "cumulative"),
+    ChartSpec("秒均收益（近5分钟）", 300, 1.0, "5分钟前", "/秒", "per_sec_rate"),
+    ChartSpec("累积经验", 60, 60.0, "1小时前", "", "cumulative"),
 )
 
 LEVEL_CONFIRM_SECONDS = 10.0
@@ -266,25 +266,25 @@ class RateTracker:
     def chart_series(self, now: float, spec: ChartSpec) -> list[int]:
         self._refresh(now)
         times = [now - (spec.count - 1 - i) * spec.step for i in range(spec.count)]
-        if spec.mode == "step_gain":
-            return self._step_gain_values(times, spec.step)
+        if spec.mode == "per_sec_rate":
+            return self._per_sec_rate_values(times)
         return self._cumulative_values(times)
 
-    def _step_gain_values(self, times: list[float], step: float) -> list[int]:
+    def _per_sec_rate_values(self, times: list[float]) -> list[int]:
         gains = list(self._gains)
+        first = self._first_gain_at
         idx = 0
+        running = 0
         values: list[int] = []
         for sample in times:
-            lo = sample - step
-            while idx < len(gains) and gains[idx][0] <= lo:
+            while idx < len(gains) and gains[idx][0] <= sample:
+                running += gains[idx][1]
                 idx += 1
-            total = 0
-            cursor = idx
-            while cursor < len(gains) and gains[cursor][0] <= sample:
-                total += gains[cursor][1]
-                cursor += 1
-            values.append(total)
-            idx = cursor
+            elapsed = sample - (first or sample) - self._paused
+            if first is None or sample <= first or running <= 0 or elapsed <= 0:
+                values.append(0)
+                continue
+            values.append(int(round(running / max(elapsed, 1.0))))
         return values
 
     def _cumulative_values(self, times: list[float]) -> list[int]:

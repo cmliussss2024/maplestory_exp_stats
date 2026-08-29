@@ -1,0 +1,16 @@
+---
+description: git 提交说明使用中文
+alwaysApply: true
+---
+
+# 中文提交
+
+`git commit` 说明用中文。写为什么，一两句。代码符号、专有名词可留英文。
+
+```
+秒均图改为累计 /秒 走势，休息时曲线会下降。
+```
+
+```
+Fix the 5-minute chart to track session per-second rate.
+```

@@ -20,13 +20,13 @@ ASSETS = Path(__file__).resolve().parent / "assets"
 LABEL_PATH = ASSETS / "exp_label.png"
 
 # Locked crop relative to the EXP label: tight around text + yellow-green slot.
+# Native size is 1920x1080 on screen 2 @ 1x. Screen 1 1366x768 @ 1.5x matches at 1.5.
 LABEL_IN_BAR = (1, 2)
 MATCH_THRESHOLD = 0.78
 OCR_WIDTH = 121
 OCR_HEIGHT = 34
 TEXT_ROW_HEIGHT = 16
 OCR_UPSCALE = 3
-# Cover 100%/125%/150%/200% DPI and fullscreen stretch of the game UI.
 _LABEL_SCALES = (
     1.0, 1.25, 1.5, 1.75, 2.0, 0.75, 2.25, 2.5, 1.1, 1.35, 1.6, 1.85, 0.5, 3.0,
 )

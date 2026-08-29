@@ -1,0 +1,15 @@
+---
+description: 经验条三张图以 docs/assets.md 为准；固定文件名，不要把经验写进文件名
+globs: docs/assets.md, assets/**/*.png, vision.py, scripts/crop_exp_assets.py, tests/test_vision.py
+alwaysApply: false
+---
+
+# 经验条资源规格同步
+
+`docs/assets.md` 是 `assets/` 三张图的唯一规格。改裁剪、文件名或用途时：
+
+1. 先读 `docs/assets.md`。
+2. 根目录只用 `exp_label.png`、`exp_bar.png`、`exp_ocr.png`。不要写成 `exp_crop_<经验>.png`。
+3. 运行时只匹配 `exp_label.png`。`exp_bar.png` / `exp_ocr.png` 是样张和测试夹具。
+4. 重裁后改测试里的期望整数，不改文件名。
+5. 文档与代码一起改。

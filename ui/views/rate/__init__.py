@@ -1,4 +1,4 @@
-"""Rate section: forecast and session columns."""
+"""Rate section: current session per-period rates."""
 
 from ui.views.rate.rate_column_panel import RateColumnPanel
 from ui.views.rate.rate_row_cell import RateRowCell

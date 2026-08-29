@@ -16,6 +16,7 @@ import cv2
 from PIL import Image, ImageTk
 
 from locator import Locator, LocatorState
+from exp_parser import ExpReading
 from rate_tracker import CHARTS, RATE_ROWS, RateTracker, Rates, eta_to_level
 from ui import ExpRateWindow, WINDOW_PATH, paint_chart
 from ui.drawing import fit_image
@@ -42,20 +43,27 @@ SEARCH_SCAN_MS = Locator.SEARCH_INTERVAL_SECONDS * 1000
 STATUS_TEXT = {
     LocatorState.SEARCHING: "定位中",
     LocatorState.LOCKED: "监控中",
-    LocatorState.RELOCATING: "重新定位",
+    LocatorState.RELOCATING: "重新定位中",
     LocatorState.FAILED: "读取失败",
+}
+
+STATUS_COLOR = {
+    LocatorState.SEARCHING: Type.Info.status_search,
+    LocatorState.LOCKED: Type.Info.status_ok,
+    LocatorState.RELOCATING: Type.Info.status_search,
+    LocatorState.FAILED: Type.Info.status_error,
 }
 
 
 def _fmt(value: int | None) -> str:
     if value is None:
-        return "—"
+        return "-"
     return f"{value:,}"
 
 
 def _fmt_percent(value: float | None) -> str:
     if value is None:
-        return "—"
+        return "-"
     return f"{value:.2f}%"
 
 
@@ -73,7 +81,7 @@ def _fmt_duration(seconds: float | None) -> str:
 class ExpRateApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("经验增速")
+        self.root.title("冒险岛经验统计助手")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.locator = Locator()
@@ -94,22 +102,22 @@ class ExpRateApp:
         self._overlay_scale = 1.0
 
         self.current_vars = {key: tk.StringVar(value="0") for key, _label in RATE_ROWS}
-        self.session_vars = {key: tk.StringVar(value="0") for key, _label in RATE_ROWS}
-        self.current_exp = tk.StringVar(value="—")
-        self.current_percent = tk.StringVar(value="—")
+        self.current_exp = tk.StringVar(value="-")
+        self.current_percent = tk.StringVar(value="-")
         self.session_exp = tk.StringVar(value="0")
         self.session_time = tk.StringVar(value="—")
-        self.level_eta = tk.StringVar(value="—")
+        self.session_rate = tk.StringVar(value="0")
+        self.level_eta = tk.StringVar(value="-")
         self.status = tk.StringVar(value=STATUS_TEXT[LocatorState.SEARCHING])
 
         self.window = ExpRateWindow(
             root,
             current_vars=self.current_vars,
-            session_vars=self.session_vars,
             current_exp=self.current_exp,
             current_percent=self.current_percent,
             session_exp=self.session_exp,
             session_time=self.session_time,
+            session_rate=self.session_rate,
             level_eta=self.level_eta,
             status=self.status,
             on_clear_current=self.clear_current,
@@ -123,16 +131,12 @@ class ExpRateApp:
         self.total_chart = self.window.chart_section.total_chart
 
         self._restore_position()
-        self.root.after_idle(self.window.rate_section.sync_divider)
         self.root.after_idle(self._mark_window_placed)
         self.root.bind("<Configure>", self._on_root_configure)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         now = time.time()
         self._refresh_rates(now)
         self._redraw_chart(now)
-        if self.session.last_exp is not None:
-            self._last_exp = self.session.last_exp
-            self.current_exp.set(_fmt(self._last_exp))
         self._tick_job = self.root.after(200, self.tick)
         self._ui_job = self.root.after(1000, self._ui_tick)
 
@@ -249,13 +253,16 @@ class ExpRateApp:
         self._redraw_chart(time.time())
 
     def _refresh_status(self) -> None:
-        self.status.set(STATUS_TEXT[self.locator.state])
-        if self.locator.state == LocatorState.FAILED:
-            self.status_label.configure(foreground=Type.status_error)
+        state = self.locator.state
+        self.status.set(STATUS_TEXT[state])
+        self.status_label.configure(foreground=STATUS_COLOR[state])
+        if state == LocatorState.FAILED:
             self.retry_btn.configure(state="normal")
         else:
-            self.status_label.configure(foreground=Type.status_ok)
             self.retry_btn.configure(state="disabled")
+        self.window.info_section.set_preview_visible(
+            state not in (LocatorState.SEARCHING, LocatorState.RELOCATING)
+        )
 
     def _apply_column(self, vars_map: dict[str, tk.StringVar], rates: Rates) -> None:
         vars_map["per_sec"].set(_fmt(rates.per_sec))
@@ -265,21 +272,19 @@ class ExpRateApp:
 
     def _refresh_rates(self, now: float) -> None:
         self._apply_column(self.current_vars, self.current.hourly_rates(now))
-        self._apply_column(self.session_vars, self.session.hourly_rates(now))
+        self.current_exp.set(_fmt(self._last_exp))
         self.current_percent.set(_fmt_percent(self._last_percent))
         self.session_exp.set(_fmt(self.session.total_gained()))
-        elapsed = self.session.elapsed_since_first_gain(now)
-        self.session_time.set(_fmt_duration(elapsed))
-        self.level_eta.set(
-            _fmt_duration(
-                eta_to_level(
-                    self._last_exp,
-                    self._last_percent,
-                    self.session.total_gained(),
-                    elapsed,
-                )
-            )
+        self.session_rate.set(_fmt(self.session.hourly_rates(now).per_hour))
+        self.session_time.set(_fmt_duration(self.session.elapsed_since_first_gain(now)))
+        current_elapsed = self.current.elapsed_since_first_gain(now)
+        eta = eta_to_level(
+            self._last_exp,
+            self._last_percent,
+            self.current.total_gained(),
+            current_elapsed,
         )
+        self.level_eta.set("-" if eta is None else _fmt_duration(eta))
 
     def _ui_tick(self) -> None:
         if self._closed or not self.root.winfo_exists():
@@ -314,9 +319,11 @@ class ExpRateApp:
             self._tick_job = self.root.after(delay, self.tick)
 
     def _scan_once(self) -> None:
-        if self.locator.state == LocatorState.FAILED:
-            return
         now = time.time()
+        if self.locator.state == LocatorState.FAILED:
+            self._set_live_reading(None)
+            self._refresh_rates(now)
+            return
 
         if self.locator.state in (LocatorState.SEARCHING, LocatorState.RELOCATING):
             image, origin_x, origin_y = capture_for_search()
@@ -329,6 +336,9 @@ class ExpRateApp:
             self.locator.on_search_result(virtual_ocr)
             if self.locator.state == LocatorState.LOCKED and virtual_ocr is not None:
                 self._consume_crop(grab_region(*virtual_ocr), now)
+            else:
+                self._set_live_reading(None)
+                self._refresh_rates(now)
             return
 
         if self.locator.state == LocatorState.LOCKED and self.locator.locked_rect is not None:
@@ -337,6 +347,17 @@ class ExpRateApp:
             self.locator.on_lock_check(found)
             if found:
                 self._consume_crop(crop, now)
+            else:
+                self._set_live_reading(None)
+                self._refresh_rates(now)
+
+    def _set_live_reading(self, reading: ExpReading | None) -> None:
+        if reading is None:
+            self._last_exp = None
+            self._last_percent = None
+            return
+        self._last_exp = reading.exp
+        self._last_percent = reading.percent
 
     def _consume_crop(self, crop, now: float) -> None:
         self._update_preview(crop)
@@ -344,18 +365,7 @@ class ExpRateApp:
         exp = None if reading is None else reading.exp
         self.current.tick(exp, now)
         self.session.tick(exp, now)
-        if reading is not None:
-            if reading.percent is not None:
-                self._last_percent = reading.percent
-            elif self._last_exp is not None and reading.exp < self._last_exp:
-                self._last_percent = None
-            self._last_exp = reading.exp
-        elif self.session.last_exp is not None:
-            self._last_exp = self.session.last_exp
-        elif self.current.last_exp is not None:
-            self._last_exp = self.current.last_exp
-        if self._last_exp is not None:
-            self.current_exp.set(_fmt(self._last_exp))
+        self._set_live_reading(reading)
         self._refresh_rates(now)
 
     def _update_preview(self, crop_bgr) -> None:
@@ -366,8 +376,8 @@ class ExpRateApp:
         r, g, b = slot.winfo_rgb(slot.cget("bg"))
         image = fit_image(
             Image.fromarray(rgb),
-            Spacing.preview_width,
-            Spacing.preview_height,
+            Spacing.Info.preview_width,
+            Spacing.Info.preview_height,
             fill=(r // 256, g // 256, b // 256),
         )
         photo = ImageTk.PhotoImage(image)
@@ -386,8 +396,8 @@ class ExpRateApp:
                 self.gain_chart,
                 gain,
                 suffix=gain_spec.suffix,
-                line=Type.gain_line,
-                fill=Type.gain_fill,
+                line=Type.Chart.gain_line,
+                fill=Type.Chart.gain_fill,
                 axis_start=gain_spec.axis_start,
             )
         if total_key != self._last_total_series:
@@ -396,8 +406,8 @@ class ExpRateApp:
                 self.total_chart,
                 total,
                 suffix=total_spec.suffix,
-                line=Type.total_line,
-                fill=Type.total_fill,
+                line=Type.Chart.total_line,
+                fill=Type.Chart.total_fill,
                 axis_start=total_spec.axis_start,
             )
 

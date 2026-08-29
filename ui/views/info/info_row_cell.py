@@ -24,13 +24,13 @@ class InfoRowCell(Panel):
         ttk.Label(
             self,
             text=caption,
-            font=Type.info_label,
-            foreground=Type.info_label_color,
+            font=Type.Info.label,
+            foreground=Type.Info.label_color,
         ).pack(side="left")
         self.value_label = ttk.Label(
             self,
             textvariable=variable,
-            font=Type.info_value,
-            foreground=Type.info_value_color,
+            font=Type.Info.value,
+            foreground=Type.Info.value_color,
         )
         self.value_label.pack(side="right")

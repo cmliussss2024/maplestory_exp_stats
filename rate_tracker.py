@@ -52,7 +52,7 @@ class ChartSpec:
 
 
 CHARTS = (
-    ChartSpec("本次秒均收益", 300, 1.0, "5分钟前", "/秒", "per_sec_rate", "current"),
+    ChartSpec("效率", 300, 1.0, "5分钟前", "/秒", "per_sec_rate", "current"),
     ChartSpec("累计经验", 60, 60.0, "1小时前", "", "cumulative", "session"),
 )
 

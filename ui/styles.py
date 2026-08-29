@@ -24,79 +24,120 @@ class Padding:
 
 
 class Spacing:
-    window_width = 372
-    section_padding = Padding(top=16, right=16, bottom=16, left=16)
-    rate_cell_spacing = 2
-    forecast_value_unit_gap = 4
-    session_value_unit_gap = 4
-    forecast_clear_pad_y = (4, 4)
-    session_clear_pad_y = (4, 4)
-    rate_hint_pad_y = (0, 2)
+    window_width = 340
+    section_padding = Padding(top=12, right=12, bottom=12, left=12)
     divider_width = 1
-    info_cell_spacing = 4
-    retry_preview_spacing = 8
-    chart_title_pad_bottom = 2
-    gain_chart_bottom_pad = 6
-    total_chart_bottom_pad = 0
-    chart_height = 118
-    chart_pad_x = 16
-    chart_pad_top = 22
-    chart_pad_bottom = 36
-    chart_caption_y = 10
-    chart_axis_label_y_offset = 14
-    chart_width = window_width - section_padding.left - section_padding.right
-    # Logical 100% EXP crop is 121x34; keep the old 2x preview slot at all DPIs.
-    preview_width = 242
-    preview_height = 68
-    menu_bar_pad_x = 12
-    menu_bar_pad_y = 4
-    overlay_pad_x = 10
-    overlay_pad_y = 8
-    overlay_row_gap = 2
-    overlay_value_unit_gap = 8
-    overlay_value_size = 28
-    overlay_unit_size = 16
-    overlay_shadow_offset = 2
-    overlay_shadow_blur = 5
-    overlay_shadow_alpha = 140
-    overlay_hover_alpha = 150
-    overlay_radius = 10
-    overlay_handle_size = 18
-    overlay_scale_min = 0.5
-    overlay_scale_max = 3.0
+
+    class Rate:
+        grid_col_gap = 12
+        grid_row_gap = 0
+        value_unit_gap = 0
+        clear_pad_y = (4, 4)
+        hint_pad_y = (0, 8)
+
+    class Cumulative:
+        cell_spacing = 2
+        value_unit_gap = 4
+        clear_pad_y = (4, 4)
+        hint_pad_y = (0, 2)
+
+    class Info:
+        cell_spacing = 4
+        retry_preview_spacing = 8
+        # Logical 100% EXP crop is 121x34; keep the old 2x preview slot at all DPIs.
+        preview_width = 242
+        preview_height = 68
+
+    class Chart:
+        title_pad_bottom = 2
+        gain_bottom_pad = 6
+        total_bottom_pad = 0
+        height = 118
+        pad_x = 16
+        pad_top = 22
+        pad_bottom = 36
+        caption_y = 10
+        axis_label_y_offset = 14
+
+    Chart.width = window_width - section_padding.left - section_padding.right
+
+    class Overlay:
+        pad_x = 10
+        pad_y = 8
+        row_gap = 2
+        value_unit_gap = 8
+        value_size = 28
+        unit_size = 16
+        shadow_offset = 2
+        shadow_blur = 5
+        shadow_alpha = 140
+        hover_alpha = 150
+        radius = 10
+        handle_size = 18
+        scale_min = 0.5
+        scale_max = 3.0
+
+
+class Color:
+    primary = "#101010"
+    secondary = "#606060"
+    tertiary = "#9D9D9D"
 
 
 class Type:
     family = _FAMILY
-    rate_header = (_FAMILY, 10)
-    rate_header_color = "#000000"
-    rate_hint = (_FAMILY, 8)
-    rate_hint_color = "#888888"
-    rate_value = (_FAMILY, 16, "bold")
-    rate_value_color = "#000000"
-    rate_unit = (_FAMILY, 10)
-    rate_unit_color = "#888888"
-    info_label = (_FAMILY, 10)
-    info_label_color = "#000000"
-    info_value = (_FAMILY, 16, "bold")
-    info_value_color = "#000000"
-    status_ok = "#000000"
-    status_error = "#c62828"
-    chart_title = (_FAMILY, 10)
-    chart_title_color = "#000000"
-    chart_caption = (_FAMILY, 8)
-    chart_peak = "#666666"
-    chart_axis = "#888888"
     divider = "#d9d9d9"
-    chart_canvas_bg = "#f7f7f7"
-    chart_canvas_border = "#d0d0d0"
-    chart_grid = "#e6e6e6"
-    gain_line = "#2e7d32"
-    gain_fill = "#c8e6c9"
-    total_line = "#1565c0"
-    total_fill = "#bbdefb"
-    overlay_hover_bg = "#222222"
-    overlay_text = "#ffffff"
-    overlay_unit = "#ffffff"
-    overlay_shadow = "#000000"
-    overlay_icon = "#ffffff"
+
+    class Rate:
+        header = (_FAMILY, 13, "bold")
+        header_color = Color.primary
+        hint = (_FAMILY, 9)
+        hint_color = Color.tertiary
+        caption = (_FAMILY, 10)
+        caption_color = Color.secondary
+        value = (_FAMILY, 15, "bold")
+        value_color = Color.primary
+        unit = (_FAMILY, 10)
+        unit_color = Color.tertiary
+
+    class Cumulative:
+        header = (_FAMILY, 13, "bold")
+        header_color = Color.primary
+        hint = (_FAMILY, 9)
+        hint_color = Color.tertiary
+        caption = (_FAMILY, 10)
+        caption_color = Color.primary
+        value = (_FAMILY, 13, "bold")
+        value_color = Color.primary
+        unit = (_FAMILY, 10)
+        unit_color = Color.tertiary
+
+    class Info:
+        label = (_FAMILY, 10)
+        label_color = Color.primary
+        value = (_FAMILY, 13, "bold")
+        value_color = Color.primary
+        status_ok = "#2e7d32"
+        status_search = "#e6a817"
+        status_error = "#c62828"
+
+    class Chart:
+        title = (_FAMILY, 10)
+        title_color = Color.primary
+        caption = (_FAMILY, 8)
+        peak = Color.secondary
+        axis = Color.tertiary
+        canvas_bg = "#f7f7f7"
+        canvas_border = "#d0d0d0"
+        grid = "#e6e6e6"
+        gain_line = "#2e7d32"
+        gain_fill = "#c8e6c9"
+        total_line = "#1565c0"
+        total_fill = "#bbdefb"
+
+    class Overlay:
+        hover_bg = "#222222"
+        text = "#ffffff"
+        unit = "#ffffff"
+        shadow = "#000000"
+        icon = "#ffffff"

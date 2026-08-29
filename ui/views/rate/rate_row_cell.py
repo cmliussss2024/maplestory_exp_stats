@@ -1,4 +1,4 @@
-"""One rate value plus its unit label."""
+"""One rate metric: caption, value, and unit."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ class RateRowCell(Panel):
         self,
         master: tk.Misc,
         *,
+        caption: str,
         variable: tk.StringVar,
         unit: str,
         value_unit_gap: int,
@@ -24,13 +25,21 @@ class RateRowCell(Panel):
         super().__init__(master, **kwargs)
         ttk.Label(
             self,
-            text=unit,
-            font=Type.rate_unit,
-            foreground=Type.rate_unit_color,
-        ).pack(side="right")
+            text=caption,
+            font=Type.Rate.caption,
+            foreground=Type.Rate.caption_color,
+        ).pack(anchor="w")
+        values = Panel(self, use_debug=False)
+        values.pack(anchor="w")
         ttk.Label(
-            self,
+            values,
             textvariable=variable,
-            font=Type.rate_value,
-            foreground=Type.rate_value_color,
-        ).pack(side="right", padx=(0, value_unit_gap))
+            font=Type.Rate.value,
+            foreground=Type.Rate.value_color,
+        ).pack(side="left")
+        ttk.Label(
+            values,
+            text=unit,
+            font=Type.Rate.unit,
+            foreground=Type.Rate.unit_color,
+        ).pack(side="left", padx=(value_unit_gap, 0))

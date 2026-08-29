@@ -22,14 +22,14 @@ class ChartSectionPanel(SectionPanel):
         self.gain_card = ChartCardPanel(
             self.body,
             title=CHARTS[0].title,
-            bottom_pad=Spacing.gain_chart_bottom_pad,
+            bottom_pad=Spacing.Chart.gain_bottom_pad,
         )
         self.gain_card.pack(fill="x")
 
         self.total_card = ChartCardPanel(
             self.body,
             title=CHARTS[1].title,
-            bottom_pad=Spacing.total_chart_bottom_pad,
+            bottom_pad=Spacing.Chart.total_bottom_pad,
         )
         self.total_card.pack(fill="x")
 

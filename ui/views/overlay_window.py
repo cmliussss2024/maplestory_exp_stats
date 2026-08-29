@@ -139,13 +139,13 @@ class OverlayWindow:
             self._win.destroy()
 
     def _clamp_scale(self, scale: float) -> float:
-        return min(Spacing.overlay_scale_max, max(Spacing.overlay_scale_min, scale))
+        return min(Spacing.Overlay.scale_max, max(Spacing.Overlay.scale_min, scale))
 
     def _px(self, value: float, *, minimum: int = 1) -> int:
         return max(minimum, round(value * self._scale))
 
     def _panel_margin(self) -> int:
-        return Spacing.overlay_shadow_blur * 2
+        return Spacing.Overlay.shadow_blur * 2
 
     def _snap(self) -> dict[str, object]:
         data: dict[str, object] = {
@@ -404,25 +404,25 @@ class OverlayWindow:
         self._blit(why)
 
     def _render(self) -> Image.Image:
-        pad_x = self._px(Spacing.overlay_pad_x)
-        pad_y = self._px(Spacing.overlay_pad_y)
-        gap = self._px(Spacing.overlay_value_unit_gap)
-        row_gap = self._px(Spacing.overlay_row_gap)
-        handle = self._px(Spacing.overlay_handle_size, minimum=14)
+        pad_x = self._px(Spacing.Overlay.pad_x)
+        pad_y = self._px(Spacing.Overlay.pad_y)
+        gap = self._px(Spacing.Overlay.value_unit_gap)
+        row_gap = self._px(Spacing.Overlay.row_gap)
+        handle = self._px(Spacing.Overlay.handle_size, minimum=14)
         label_gap = self._px(12)
         stroke = self._px(2)
-        blur = Spacing.overlay_shadow_blur
-        offset = Spacing.overlay_shadow_offset
-        radius = self._px(Spacing.overlay_radius, minimum=4)
+        blur = Spacing.Overlay.shadow_blur
+        offset = Spacing.Overlay.shadow_offset
+        radius = self._px(Spacing.Overlay.radius, minimum=4)
         margin = blur * 2
-        value_font = self._font(self._px(Spacing.overlay_value_size, minimum=12), bold=True)
-        unit_font = self._font(self._px(Spacing.overlay_unit_size, minimum=8), bold=False)
+        value_font = self._font(self._px(Spacing.Overlay.value_size, minimum=12), bold=True)
+        unit_font = self._font(self._px(Spacing.Overlay.unit_size, minimum=8), bold=False)
         restore_font = unit_font
-        fill = (*_rgb(Type.overlay_text), 255)
-        unit_fill = (*_rgb(Type.overlay_unit), 255)
-        shadow = (*_rgb(Type.overlay_shadow), Spacing.overlay_shadow_alpha)
-        hover_fill = (*_rgb(Type.overlay_hover_bg), Spacing.overlay_hover_alpha)
-        icon_fill = (*_rgb(Type.overlay_icon), 255)
+        fill = (*_rgb(Type.Overlay.text), 255)
+        unit_fill = (*_rgb(Type.Overlay.unit), 255)
+        shadow = (*_rgb(Type.Overlay.shadow), Spacing.Overlay.shadow_alpha)
+        hover_fill = (*_rgb(Type.Overlay.hover_bg), Spacing.Overlay.hover_alpha)
+        icon_fill = (*_rgb(Type.Overlay.icon), 255)
         restore_w = int(restore_font.getlength(_RESTORE))
         _rx0, r_top, _rx1, r_bottom = restore_font.getbbox(_RESTORE, anchor="ls")
 

@@ -1,4 +1,4 @@
-"""One rate column: title, rows, and reset button."""
+"""效率 column: title, per-period rates, and reset."""
 
 from __future__ import annotations
 
@@ -13,46 +13,60 @@ from ui.styles import Spacing, Type
 from ui.views.panel import Panel
 from ui.views.rate.rate_row_cell import RateRowCell
 
+_CAPTIONS = {
+    "per_sec": "即时",
+    "per_min": "分钟",
+    "per_5min": "5分钟",
+    "per_hour": "小时",
+}
+
 
 class RateColumnPanel(Panel):
     def __init__(
         self,
         master: tk.Misc,
         *,
-        title: str,
         vars_map: dict[str, tk.StringVar],
         on_clear: Callable[[], None],
-        value_unit_gap: int,
-        clear_pad_y: tuple[int, int],
-        hint: str = "",
+        on_float: Callable[[], None],
         **kwargs: Any,
     ) -> None:
         super().__init__(master, use_debug=False, **kwargs)
+        header = Panel(self, use_debug=False)
+        header.pack(fill="x")
+        ttk.Button(header, text="浮窗", command=on_float).pack(side="right")
+        ttk.Label(
+            header,
+            text="效率",
+            font=Type.Rate.header,
+            foreground=Type.Rate.header_color,
+        ).pack(side="left")
         ttk.Label(
             self,
-            text=title,
-            font=Type.rate_header,
-            foreground=Type.rate_header_color,
-        ).pack(anchor="e")
-        if hint:
-            ttk.Label(
-                self,
-                text=hint,
-                font=Type.rate_hint,
-                foreground=Type.rate_hint_color,
-                justify="right",
-            ).pack(anchor="e", pady=Spacing.rate_hint_pad_y)
-        last = len(RATE_ROWS) - 1
+            text="1 分钟无增长则自动重置",
+            font=Type.Rate.hint,
+            foreground=Type.Rate.hint_color,
+        ).pack(anchor="w", pady=Spacing.Rate.hint_pad_y)
+        grid = Panel(self, use_debug=False)
+        grid.pack(fill="x")
+        grid.columnconfigure(0, weight=1, uniform="rate")
+        grid.columnconfigure(1, weight=1, uniform="rate")
         for index, (key, unit) in enumerate(RATE_ROWS):
+            row, col = divmod(index, 2)
             RateRowCell(
-                self,
+                grid,
+                caption=_CAPTIONS[key],
                 variable=vars_map[key],
                 unit=unit,
-                value_unit_gap=value_unit_gap,
-            ).pack(
-                anchor="e",
-                pady=(0, Spacing.rate_cell_spacing) if index < last else 0,
+                value_unit_gap=Spacing.Rate.value_unit_gap,
+            ).grid(
+                row=row,
+                column=col,
+                sticky="ew",
+                padx=(0, Spacing.Rate.grid_col_gap) if col == 0 else 0,
+                pady=(0, Spacing.Rate.grid_row_gap) if row == 0 else 0,
             )
         ttk.Button(self, text="重置", command=on_clear).pack(
-            anchor="e", pady=(clear_pad_y[0], 0),
+            anchor="e",
+            pady=(Spacing.Rate.clear_pad_y[0], 0),
         )

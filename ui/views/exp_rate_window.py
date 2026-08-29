@@ -9,7 +9,7 @@ import tkinter as tk
 from ui.views.chart import ChartSectionPanel
 from ui.views.hairline import Hairline
 from ui.views.info import InfoSectionPanel
-from ui.views.menu_bar_cell import MenuBarCell
+from ui.views.cumulative import CumulativeSectionPanel
 from ui.views.rate import RateSectionPanel
 
 
@@ -19,11 +19,11 @@ class ExpRateWindow:
         root: tk.Tk,
         *,
         current_vars: dict[str, tk.StringVar],
-        session_vars: dict[str, tk.StringVar],
         current_exp: tk.StringVar,
         current_percent: tk.StringVar,
         session_exp: tk.StringVar,
         session_time: tk.StringVar,
+        session_rate: tk.StringVar,
         level_eta: tk.StringVar,
         status: tk.StringVar,
         on_clear_current: Callable[[], None],
@@ -33,19 +33,25 @@ class ExpRateWindow:
     ) -> None:
         root.columnconfigure(0, weight=1)
 
-        self.menu_bar = MenuBarCell(root, on_float=on_float)
-        self.menu_bar.grid(row=0, column=0, sticky="ew")
-
-        Hairline(root).grid(row=1, column=0, sticky="ew")
-
         self.rate_section = RateSectionPanel(
             root,
             current_vars=current_vars,
-            session_vars=session_vars,
             on_clear_current=on_clear_current,
+            on_float=on_float,
+        )
+        self.rate_section.grid(row=0, column=0, sticky="ew")
+
+        Hairline(root).grid(row=1, column=0, sticky="ew")
+
+        self.cumulative_section = CumulativeSectionPanel(
+            root,
+            session_exp=session_exp,
+            session_time=session_time,
+            session_rate=session_rate,
+            level_eta=level_eta,
             on_clear_session=on_clear_session,
         )
-        self.rate_section.grid(row=2, column=0, sticky="ew")
+        self.cumulative_section.grid(row=2, column=0, sticky="ew")
 
         Hairline(root).grid(row=3, column=0, sticky="ew")
 
@@ -53,9 +59,6 @@ class ExpRateWindow:
             root,
             current_exp=current_exp,
             current_percent=current_percent,
-            session_exp=session_exp,
-            session_time=session_time,
-            level_eta=level_eta,
             status=status,
             on_retry=on_retry,
         )

@@ -32,6 +32,8 @@ _LABEL_SCALES = (
 )
 # Word-boundary MapleStory so Cursor "maplestory_exp_stats" is not a hit.
 _GAME_TITLE = re.compile(r"冒险岛|\bmaplestory\b", re.IGNORECASE)
+# Our window title contains 冒险岛; skip it or we capture ourselves.
+_OWN_TITLE = "冒险岛经验统计助手"
 
 _ocr: RapidOCR | None = None
 _label_bgr: np.ndarray | None = None
@@ -256,7 +258,7 @@ def find_game_window() -> tuple[int, int, int, int, str] | None:
         buf = ctypes.create_unicode_buffer(length + 1)
         user32.GetWindowTextW(hwnd, buf, length + 1)
         title = buf.value
-        if _GAME_TITLE.search(title) is None:
+        if title == _OWN_TITLE or _GAME_TITLE.search(title) is None:
             return True
         rect = wintypes.RECT()
         user32.GetWindowRect(hwnd, ctypes.byref(rect))

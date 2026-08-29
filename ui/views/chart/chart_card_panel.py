@@ -24,17 +24,17 @@ class ChartCardPanel(Panel):
         self._title = ttk.Label(
             self,
             text=title,
-            font=Type.chart_title,
-            foreground=Type.chart_title_color,
+            font=Type.Chart.title,
+            foreground=Type.Chart.title_color,
         )
-        self._title.pack(anchor="w", pady=(0, Spacing.chart_title_pad_bottom))
+        self._title.pack(anchor="w", pady=(0, Spacing.Chart.title_pad_bottom))
         self.canvas = tk.Canvas(
             self,
-            width=Spacing.chart_width,
-            height=Spacing.chart_height,
-            background=Type.chart_canvas_bg,
+            width=Spacing.Chart.width,
+            height=Spacing.Chart.height,
+            background=Type.Chart.canvas_bg,
             highlightthickness=1,
-            highlightbackground=Type.chart_canvas_border,
+            highlightbackground=Type.Chart.canvas_border,
         )
         self.canvas.pack(pady=(0, bottom_pad))
 

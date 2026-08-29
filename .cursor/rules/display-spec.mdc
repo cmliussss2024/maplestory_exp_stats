@@ -1,0 +1,15 @@
+---
+description: 双屏 DPI 与游戏窗口定位以 docs/display.md 为准
+globs: docs/display.md, dpi.py, vision.py, window_capture.py, app.py
+alwaysApply: false
+---
+
+# 显示器与定位规格同步
+
+`docs/display.md` 是本机屏幕和找游戏窗口的唯一规格。改采集、DPI、窗口枚举、经验条匹配尺度时：
+
+1. 先读 `docs/display.md`。屏幕 1 是 2560×1600 @ 1.5×（原点 left=-2560）；屏幕 2 是 2560×1440 @ 1.0×（主屏，原点 left=0）。
+2. 1366×768 放在屏幕 1、1920×1080 放在屏幕 2，都必须能定位经验条。不要只按 1080p + 100% DPI 验收。
+3. 找窗口用「冒险岛」或单词 `\bmaplestory\b`。禁止 `"maplestory" in title`：会命中 Cursor 的 `maplestory_exp_stats`，再按面积排序会截到 IDE。
+4. 进程保持 DPI-unaware；物理像素走 `physical_call` / Graphics Capture。不要让 Tk 跟随每监视器 DPI。
+5. 文档与代码一起改。

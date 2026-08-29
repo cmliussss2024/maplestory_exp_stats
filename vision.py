@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -29,6 +30,8 @@ OCR_UPSCALE = 3
 _LABEL_SCALES = (
     1.0, 1.25, 1.5, 1.75, 2.0, 0.75, 2.25, 2.5, 1.1, 1.35, 1.6, 1.85, 0.5, 3.0,
 )
+# Word-boundary MapleStory so Cursor "maplestory_exp_stats" is not a hit.
+_GAME_TITLE = re.compile(r"冒险岛|\bmaplestory\b", re.IGNORECASE)
 
 _ocr: RapidOCR | None = None
 _label_bgr: np.ndarray | None = None
@@ -253,8 +256,7 @@ def find_game_window() -> tuple[int, int, int, int, str] | None:
         buf = ctypes.create_unicode_buffer(length + 1)
         user32.GetWindowTextW(hwnd, buf, length + 1)
         title = buf.value
-        lowered = title.lower()
-        if "冒险岛" not in title and "maplestory" not in lowered:
+        if _GAME_TITLE.search(title) is None:
             return True
         rect = wintypes.RECT()
         user32.GetWindowRect(hwnd, ctypes.byref(rect))

@@ -56,7 +56,7 @@ class CumulativeColumnPanel(Panel):
                 fill="x",
                 pady=(0, Spacing.Cumulative.cell_spacing) if index < last else 0,
             )
-        ttk.Button(self, text="重置", command=on_clear).pack(
+        ttk.Button(self, text="重置", command=on_clear, style="Theme.TButton").pack(
             anchor="e",
             pady=(Spacing.Cumulative.clear_pad_y[0], 0),
         )

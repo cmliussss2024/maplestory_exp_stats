@@ -19,6 +19,7 @@ class RateSectionPanel(SectionPanel):
         current_vars: dict[str, tk.StringVar],
         on_clear_current: Callable[[], None],
         on_float: Callable[[], None],
+        on_toggle_theme: Callable[[], None],
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
@@ -27,5 +28,7 @@ class RateSectionPanel(SectionPanel):
             vars_map=current_vars,
             on_clear=on_clear_current,
             on_float=on_float,
+            on_toggle_theme=on_toggle_theme,
         )
         self.forecast.pack(fill="x")
+        self.theme_button = self.forecast.theme_button

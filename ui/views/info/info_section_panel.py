@@ -7,6 +7,7 @@ from typing import Any
 
 import tkinter as tk
 
+from ui import theme
 from ui.styles import Spacing
 from ui.views.info.info_row_cell import InfoRowCell
 from ui.views.info.retry_row_cell import RetryRowCell
@@ -85,3 +86,16 @@ class InfoSectionPanel(SectionPanel):
                 state=state,
             )
         self._photo = photo
+
+    def _clear_preview(self) -> None:
+        if self._image_id is not None:
+            self.image_canvas.delete(self._image_id)
+            self._image_id = None
+        self._photo = None
+
+    def apply_theme(self) -> None:
+        super().apply_theme()
+        # Repaint the slot background first; app repaints the crop on top so
+        # the fitted image padding uses the new background color.
+        self.image_canvas.configure(bg=theme.palette().bg)
+        self._clear_preview()

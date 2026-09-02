@@ -1,10 +1,28 @@
-"""Window spacing and type styles."""
+"""Window spacing and type styles.
+
+Fonts and spacing are theme-independent. Color attributes (``Type.divider``,
+``*_color``, status and chart colors) are backed by descriptors that resolve
+against the active theme palette at access time, so they always reflect the
+current theme even though callers read them through the class object.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ui.theme import palette
+
 _FAMILY = "Microsoft YaHei UI"
+
+
+class _PaletteColor:
+    """Descriptor resolving a palette field for class- and instance reads."""
+
+    def __init__(self, key: str) -> None:
+        self._key = key
+
+    def __get__(self, _obj, _objtype=None) -> str:
+        return getattr(palette(), self._key)
 
 
 @dataclass(frozen=True)
@@ -79,6 +97,8 @@ class Spacing:
 
 
 class Color:
+    """Light-theme literals kept for compatibility (no longer referenced by UI)."""
+
     primary = "#101010"
     secondary = "#606060"
     tertiary = "#9D9D9D"
@@ -86,56 +106,57 @@ class Color:
 
 class Type:
     family = _FAMILY
-    divider = "#d9d9d9"
+
+    divider = _PaletteColor("divider")
 
     class Rate:
         header = (_FAMILY, 13, "bold")
-        header_color = Color.primary
+        header_color = _PaletteColor("text_primary")
         hint = (_FAMILY, 9)
-        hint_color = Color.tertiary
+        hint_color = _PaletteColor("text_tertiary")
         caption = (_FAMILY, 10)
-        caption_color = Color.secondary
+        caption_color = _PaletteColor("text_secondary")
         value = (_FAMILY, 15, "bold")
-        value_color = Color.primary
+        value_color = _PaletteColor("text_primary")
         unit = (_FAMILY, 10)
-        unit_color = Color.tertiary
+        unit_color = _PaletteColor("text_tertiary")
 
     class Cumulative:
         header = (_FAMILY, 13, "bold")
-        header_color = Color.primary
+        header_color = _PaletteColor("text_primary")
         hint = (_FAMILY, 9)
-        hint_color = Color.tertiary
+        hint_color = _PaletteColor("text_tertiary")
         caption = (_FAMILY, 10)
-        caption_color = Color.primary
+        caption_color = _PaletteColor("text_primary")
         value = (_FAMILY, 13, "bold")
-        value_color = Color.primary
+        value_color = _PaletteColor("text_primary")
         unit = (_FAMILY, 10)
-        unit_color = Color.tertiary
+        unit_color = _PaletteColor("text_tertiary")
 
     class Info:
         label = (_FAMILY, 10)
-        label_color = Color.primary
+        label_color = _PaletteColor("text_primary")
         value = (_FAMILY, 13, "bold")
-        value_color = Color.primary
+        value_color = _PaletteColor("text_primary")
         detail = (_FAMILY, 10)
-        detail_color = Color.tertiary
-        status_ok = "#2e7d32"
-        status_search = "#e6a817"
-        status_error = "#c62828"
+        detail_color = _PaletteColor("text_tertiary")
+        status_ok = _PaletteColor("status_ok")
+        status_search = _PaletteColor("status_search")
+        status_error = _PaletteColor("status_error")
 
     class Chart:
         title = (_FAMILY, 10)
-        title_color = Color.primary
+        title_color = _PaletteColor("text_primary")
         caption = (_FAMILY, 8)
-        peak = Color.secondary
-        axis = Color.tertiary
-        canvas_bg = "#f7f7f7"
-        canvas_border = "#d0d0d0"
-        grid = "#e6e6e6"
-        gain_line = "#2e7d32"
-        gain_fill = "#c8e6c9"
-        total_line = "#1565c0"
-        total_fill = "#bbdefb"
+        peak = _PaletteColor("text_secondary")
+        axis = _PaletteColor("text_tertiary")
+        canvas_bg = _PaletteColor("chart_bg")
+        canvas_border = _PaletteColor("chart_border")
+        grid = _PaletteColor("grid")
+        gain_line = _PaletteColor("gain_line")
+        gain_fill = _PaletteColor("gain_fill")
+        total_line = _PaletteColor("total_line")
+        total_fill = _PaletteColor("total_fill")
 
     class Overlay:
         hover_bg = "#222222"

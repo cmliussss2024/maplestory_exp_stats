@@ -28,6 +28,7 @@ class ChartCardPanel(Panel):
             foreground=Type.Chart.title_color,
         )
         self._title.pack(anchor="w", pady=(0, Spacing.Chart.title_pad_bottom))
+        self.register_theme_label(self._title, "text_primary")
         self.canvas = tk.Canvas(
             self,
             width=Spacing.Chart.width,
@@ -40,3 +41,10 @@ class ChartCardPanel(Panel):
 
     def set_title(self, title: str) -> None:
         self._title.configure(text=title)
+
+    def apply_theme(self) -> None:
+        super().apply_theme()
+        self.canvas.configure(
+            background=Type.Chart.canvas_bg,
+            highlightbackground=Type.Chart.canvas_border,
+        )

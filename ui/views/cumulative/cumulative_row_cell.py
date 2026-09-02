@@ -23,22 +23,28 @@ class CumulativeRowCell(Panel):
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
-        ttk.Label(
+        caption_label = ttk.Label(
             self,
             text=caption,
             font=Type.Cumulative.caption,
             foreground=Type.Cumulative.caption_color,
-        ).pack(side="left")
+        )
+        caption_label.pack(side="left")
+        self.register_theme_label(caption_label, "text_primary")
         if unit:
-            ttk.Label(
+            unit_label = ttk.Label(
                 self,
                 text=unit,
                 font=Type.Cumulative.unit,
                 foreground=Type.Cumulative.unit_color,
-            ).pack(side="right")
-        ttk.Label(
+            )
+            unit_label.pack(side="right")
+            self.register_theme_label(unit_label, "text_tertiary")
+        value_label = ttk.Label(
             self,
             textvariable=variable,
             font=Type.Cumulative.value,
             foreground=Type.Cumulative.value_color,
-        ).pack(side="right", padx=(0, value_unit_gap) if unit else 0)
+        )
+        value_label.pack(side="right", padx=(0, value_unit_gap) if unit else 0)
+        self.register_theme_label(value_label, "text_primary")

@@ -62,3 +62,13 @@ class SectionPanel(Panel):
         )
         self._divider.delete("all")
         self._divider.create_line(0, 0, 0, height, fill=Type.divider)
+
+    def apply_theme(self) -> None:
+        super().apply_theme()
+        if not hasattr(self, "_divider"):
+            return
+        self._divider.configure(bg=Type.divider)
+        height = self.winfo_height()
+        self._divider.delete("all")
+        if height > 1:
+            self._divider.create_line(0, 0, 0, height, fill=Type.divider)

@@ -20,5 +20,11 @@ class RetryRowCell(Panel):
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
-        self.button = ttk.Button(self, text="重新监听", command=on_retry, state="disabled")
+        self.button = ttk.Button(
+            self,
+            text="重新监听",
+            command=on_retry,
+            state="disabled",
+            style="Theme.TButton",
+        )
         self.button.pack(anchor="e")

@@ -16,3 +16,6 @@ class Hairline(tk.Frame):
             highlightthickness=0,
             bd=0,
         )
+
+    def apply_theme(self) -> None:
+        self.configure(bg=Type.divider)

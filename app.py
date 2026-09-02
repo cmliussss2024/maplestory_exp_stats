@@ -20,6 +20,7 @@ from exp_parser import ExpReading
 from paths import data_dir
 from rate_tracker import CHARTS, RATE_ROWS, RateTracker, Rates, eta_to_level
 from ui import ExpRateWindow, WINDOW_PATH, paint_chart
+from ui import theme
 from ui.drawing import fit_image
 from ui.styles import Spacing, Type
 from ui.views.overlay_window import OverlayWindow
@@ -48,12 +49,14 @@ STATUS_TEXT = {
     LocatorState.FAILED: "读取失败",
 }
 
-STATUS_COLOR = {
-    LocatorState.SEARCHING: Type.Info.status_search,
-    LocatorState.LOCKED: Type.Info.status_ok,
-    LocatorState.RELOCATING: Type.Info.status_search,
-    LocatorState.FAILED: Type.Info.status_error,
-}
+
+def _status_color(state: LocatorState) -> str:
+    """Resolve the status text color from the current theme at call time."""
+    if state == LocatorState.LOCKED:
+        return Type.Info.status_ok
+    if state == LocatorState.FAILED:
+        return Type.Info.status_error
+    return Type.Info.status_search
 
 
 def _fmt(value: int | None) -> str:
@@ -104,6 +107,11 @@ class ExpRateApp:
         self._last_total_series: tuple | None = None
         self._float: OverlayWindow | None = None
         self._overlay_scale = 1.0
+        self._preview_crop = None
+
+        # Apply the persisted theme before any widget is created so the first
+        # frame already uses the right palette.
+        theme.set_theme(theme.load_preference())
 
         self.current_vars = {key: tk.StringVar(value="0") for key, _label in RATE_ROWS}
         self.current_exp = tk.StringVar(value="-")
@@ -130,9 +138,11 @@ class ExpRateApp:
             on_clear_session=self.clear_session,
             on_retry=self.retry,
             on_float=self.enter_float,
+            on_toggle_theme=self.on_toggle_theme,
         )
         self.retry_btn = self.window.retry_row.button
         self.status_label = self.window.info_section.status_label
+        self.theme_button = self.window.theme_button
         self.gain_chart = self.window.chart_section.gain_chart
         self.total_chart = self.window.chart_section.total_chart
 
@@ -260,6 +270,22 @@ class ExpRateApp:
         self._refresh_rates(time.time())
         self._redraw_chart(time.time())
 
+    def on_toggle_theme(self) -> None:
+        next_name = "dark" if theme.current_theme() == "light" else "light"
+        self.apply_theme(next_name)
+
+    def apply_theme(self, name: str) -> None:
+        """Switch theme, persist it, then repaint colors/data-dependent parts."""
+        if self._float is not None or self._closed:
+            return
+        theme.set_theme(name)
+        theme.save_preference(name)
+        self.window.apply_theme()
+        self._refresh_status()
+        self._redraw_chart(time.time(), force=True)
+        if self._preview_crop is not None:
+            self._update_preview(self._preview_crop)
+
     def _status_detail(self, now: float | None = None) -> str:
         state = self.locator.state
         if state not in (LocatorState.SEARCHING, LocatorState.RELOCATING):
@@ -279,7 +305,7 @@ class ExpRateApp:
         state = self.locator.state
         self.status.set(STATUS_TEXT[state])
         self.status_detail.set(self._status_detail())
-        self.status_label.configure(foreground=STATUS_COLOR[state])
+        self.status_label.configure(foreground=_status_color(state))
         if state == LocatorState.FAILED:
             self.retry_btn.configure(state="normal")
         else:
@@ -395,7 +421,9 @@ class ExpRateApp:
 
     def _update_preview(self, crop_bgr) -> None:
         if crop_bgr is None or crop_bgr.size == 0:
+            self._preview_crop = None
             return
+        self._preview_crop = crop_bgr
         rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
         slot = self.window.info_section.image_canvas
         r, g, b = slot.winfo_rgb(slot.cget("bg"))
@@ -408,14 +436,14 @@ class ExpRateApp:
         photo = ImageTk.PhotoImage(image)
         self.window.info_section.set_image(photo)
 
-    def _redraw_chart(self, now: float) -> None:
+    def _redraw_chart(self, now: float, *, force: bool = False) -> None:
         trackers = {"current": self.current, "session": self.session}
         gain_spec, total_spec = CHARTS
         gain = trackers[gain_spec.source].chart_series(now, gain_spec)
         total = trackers[total_spec.source].chart_series(now, total_spec)
         gain_key = (tuple(gain), gain_spec.axis_start, gain_spec.suffix)
         total_key = (tuple(total), total_spec.axis_start, total_spec.suffix)
-        if gain_key != self._last_gain_series:
+        if force or gain_key != self._last_gain_series:
             self._last_gain_series = gain_key
             paint_chart(
                 self.gain_chart,
@@ -425,7 +453,7 @@ class ExpRateApp:
                 fill=Type.Chart.gain_fill,
                 axis_start=gain_spec.axis_start,
             )
-        if total_key != self._last_total_series:
+        if force or total_key != self._last_total_series:
             self._last_total_series = total_key
             paint_chart(
                 self.total_chart,

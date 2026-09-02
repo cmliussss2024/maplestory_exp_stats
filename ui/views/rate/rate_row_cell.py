@@ -23,23 +23,29 @@ class RateRowCell(Panel):
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
-        ttk.Label(
+        caption_label = ttk.Label(
             self,
             text=caption,
             font=Type.Rate.caption,
             foreground=Type.Rate.caption_color,
-        ).pack(anchor="w")
+        )
+        caption_label.pack(anchor="w")
+        self.register_theme_label(caption_label, "text_secondary")
         values = Panel(self, use_debug=False)
         values.pack(anchor="w")
-        ttk.Label(
+        value_label = ttk.Label(
             values,
             textvariable=variable,
             font=Type.Rate.value,
             foreground=Type.Rate.value_color,
-        ).pack(side="left")
-        ttk.Label(
+        )
+        value_label.pack(side="left")
+        self.register_theme_label(value_label, "text_primary")
+        unit_label = ttk.Label(
             values,
             text=unit,
             font=Type.Rate.unit,
             foreground=Type.Rate.unit_color,
-        ).pack(side="left", padx=(value_unit_gap, 0))
+        )
+        unit_label.pack(side="left", padx=(value_unit_gap, 0))
+        self.register_theme_label(unit_label, "text_tertiary")

@@ -22,19 +22,23 @@ class InfoRowCell(Panel):
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
-        ttk.Label(
+        caption_label = ttk.Label(
             self,
             text=caption,
             font=Type.Info.label,
             foreground=Type.Info.label_color,
-        ).pack(side="left")
+        )
+        caption_label.pack(side="left")
+        self.register_theme_label(caption_label, "text_primary")
         if detail is not None:
-            ttk.Label(
+            detail_label = ttk.Label(
                 self,
                 textvariable=detail,
                 font=Type.Info.detail,
                 foreground=Type.Info.detail_color,
-            ).pack(side="right")
+            )
+            detail_label.pack(side="right")
+            self.register_theme_label(detail_label, "text_tertiary")
         self.value_label = ttk.Label(
             self,
             textvariable=variable,
@@ -42,3 +46,4 @@ class InfoRowCell(Panel):
             foreground=Type.Info.value_color,
         )
         self.value_label.pack(side="right", padx=(0, 4) if detail is not None else 0)
+        self.register_theme_label(self.value_label, "text_primary")

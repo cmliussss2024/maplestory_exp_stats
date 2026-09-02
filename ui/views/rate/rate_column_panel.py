@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from rate_tracker import RATE_ROWS
+from ui import theme
 from ui.styles import Spacing, Type
 from ui.views.panel import Panel
 from ui.views.rate.rate_row_cell import RateRowCell
@@ -29,24 +30,41 @@ class RateColumnPanel(Panel):
         vars_map: dict[str, tk.StringVar],
         on_clear: Callable[[], None],
         on_float: Callable[[], None],
+        on_toggle_theme: Callable[[], None],
         **kwargs: Any,
     ) -> None:
         super().__init__(master, use_debug=False, **kwargs)
         header = Panel(self, use_debug=False)
         header.pack(fill="x")
-        ttk.Button(header, text="浮窗", command=on_float).pack(side="right")
-        ttk.Label(
+        ttk.Button(
+            header,
+            text="浮窗",
+            command=on_float,
+            style="Theme.TButton",
+        ).pack(side="right")
+        self.theme_button = ttk.Button(
+            header,
+            text=theme.toggle_label(),
+            command=on_toggle_theme,
+            style="Theme.TButton",
+        )
+        self.theme_button.pack(side="right", padx=(0, 4))
+        title_label = ttk.Label(
             header,
             text="收益",
             font=Type.Rate.header,
             foreground=Type.Rate.header_color,
-        ).pack(side="left")
-        ttk.Label(
+        )
+        title_label.pack(side="left")
+        self.register_theme_label(title_label, "text_primary")
+        hint_label = ttk.Label(
             self,
             text="1 分钟无增长则自动重置",
             font=Type.Rate.hint,
             foreground=Type.Rate.hint_color,
-        ).pack(anchor="w", pady=Spacing.Rate.hint_pad_y)
+        )
+        hint_label.pack(anchor="w", pady=Spacing.Rate.hint_pad_y)
+        self.register_theme_label(hint_label, "text_tertiary")
         grid = Panel(self, use_debug=False)
         grid.pack(fill="x")
         grid.columnconfigure(0, weight=1, uniform="rate")
@@ -66,7 +84,12 @@ class RateColumnPanel(Panel):
                 padx=(0, Spacing.Rate.grid_col_gap) if col == 0 else 0,
                 pady=(0, Spacing.Rate.grid_row_gap) if row == 0 else 0,
             )
-        ttk.Button(self, text="重置", command=on_clear).pack(
+        ttk.Button(
+            self,
+            text="重置",
+            command=on_clear,
+            style="Theme.TButton",
+        ).pack(
             anchor="e",
             pady=(Spacing.Rate.clear_pad_y[0], 0),
         )

@@ -116,6 +116,47 @@ class ExpRateWindow:
 
         self.apply_theme()
 
+    def _refresh_dark_titlebar(self) -> None:
+        """Push the active theme to the OS title bar, deferring if unmapped.
+
+        DWM ignores ``DwmSetWindowAttribute`` until the window is mapped to
+        the screen, so on the very first paint the title bar can stay light
+        even though ``apply_theme`` already painted the rest of the window
+        dark. We re-issue the attribute the first time Tk reports the root
+        as visible. Manual theme toggles always run on a mapped window, so
+        they stay instantaneous.
+        """
+        hwnd = _root_hwnd(self.root)
+        if not hwnd:
+            return
+        _set_dark_titlebar(hwnd, theme.current_theme() == "dark")
+        try:
+            mapped = bool(self.root.winfo_ismapped())
+        except tk.TclError:
+            mapped = False
+        if mapped:
+            self._titlebar_pending = False
+            try:
+                self.root.unbind("<Visibility>")
+            except tk.TclError:
+                pass
+            return
+        if not getattr(self, "_titlebar_pending", False):
+            self._titlebar_pending = True
+            self.root.bind("<Visibility>", self._on_titlebar_visibility, add="+")
+
+    def _on_titlebar_visibility(self, event: tk.Event) -> None:
+        if event.widget is not self.root:
+            return
+        if not getattr(self, "_titlebar_pending", False):
+            return
+        self._titlebar_pending = False
+        try:
+            self.root.unbind("<Visibility>")
+        except tk.TclError:
+            pass
+        self._refresh_dark_titlebar()
+
     def apply_theme(self) -> None:
         """Repaint every widget, shared ttk style, and the theme button."""
         p = theme.palette()
@@ -155,6 +196,4 @@ class ExpRateWindow:
         for child in self.root.winfo_children():
             apply_widget_theme(child)
         self.theme_button.configure(text=theme.toggle_label())
-        hwnd = _root_hwnd(self.root)
-        if hwnd:
-            _set_dark_titlebar(hwnd, theme.current_theme() == "dark")
+        self._refresh_dark_titlebar()

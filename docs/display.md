@@ -28,6 +28,6 @@
 
 标题匹配：含「冒险岛」，或单词 `MapleStory`（`\bmaplestory\b`，忽略大小写）。
 
-排除本工具窗口标题「冒险岛经验统计助手」（也含「冒险岛」）。禁止 `"maplestory" in title.lower()`。本仓库目录名 `maplestory_exp_stats` 会出现在 Cursor 标题里，会被当成游戏窗。再按窗口面积取最大时：屏幕 2 上最大化的 IDE 比屏幕 1 上 1366×768 的游戏大；DPI-unaware 的 `GetWindowRect` 还会把 1.5 倍屏上的游戏缩得更小，于是截到 IDE，定位失败。
+排除本工具窗口标题「经验统计助手」。禁止 `"maplestory" in title.lower()`。本仓库目录名 `maplestory_exp_stats` 会出现在 Cursor 标题里，会被当成游戏窗。再按窗口面积取最大时：屏幕 2 上最大化的 IDE 比屏幕 1 上 1366×768 的游戏大；DPI-unaware 的 `GetWindowRect` 还会把 1.5 倍屏上的游戏缩得更小，于是截到 IDE，定位失败。
 
 本工具自身窗口、浏览器、资源管理器都不是采集目标。

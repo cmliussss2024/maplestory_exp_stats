@@ -82,7 +82,7 @@ def _fmt_duration(seconds: float | None) -> str:
 class ExpRateApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("冒险岛经验统计助手")
+        self.root.title("经验统计助手")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.locator = Locator()
@@ -447,7 +447,7 @@ def _report_crash(exc: BaseException) -> None:
     try:
         import ctypes
 
-        ctypes.windll.user32.MessageBoxW(0, text, "冒险岛经验统计助手", 0x10)
+        ctypes.windll.user32.MessageBoxW(0, text, "经验统计助手", 0x10)
     except Exception:
         pass
 

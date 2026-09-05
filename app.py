@@ -86,10 +86,7 @@ class ExpRateApp:
         self.session = RateTracker(history_path=HISTORY_PATH)
         self._busy = False
         self._closed = False
-        self._last_exp: int | None = None
-        self._last_percent: float | None = None
-        self._eta_exp: int | None = None
-        self._eta_percent: float | None = None
+        self._accepted_percent: float | None = None
         self._window_placed = False
         self._tick_job: str | None = None
         self._ui_job: str | None = None
@@ -274,17 +271,18 @@ class ExpRateApp:
 
     def _refresh_rates(self, now: float) -> None:
         self._apply_column(self.current_vars, self.current.hourly_rates(now))
-        self.current_exp.set(_fmt(self._last_exp))
-        self.current_percent.set(_fmt_percent(self._last_percent))
+        if self.current.last_exp is None:
+            self._accepted_percent = None
+        self.current_exp.set(_fmt(self.current.last_exp))
+        self.current_percent.set(_fmt_percent(self._accepted_percent))
         self.session_exp.set(_fmt(self.session.total_gained()))
         self.session_rate.set(_fmt(self.session.hourly_rates(now).per_hour))
         self.session_time.set(_fmt_duration(self.session.elapsed_since_first_gain(now)))
-        current_elapsed = self.current.elapsed_since_first_gain(now)
         eta = eta_to_level(
-            self._eta_exp,
-            self._eta_percent,
+            self.current.last_exp,
+            self._accepted_percent,
             self.current.total_gained(),
-            current_elapsed,
+            self.current.elapsed_since_first_gain(now),
         )
         self.level_eta.set(_fmt_duration(eta))
 
@@ -324,7 +322,6 @@ class ExpRateApp:
     def _scan_once(self) -> None:
         now = time.time()
         if self.locator.state == LocatorState.FAILED:
-            self._set_live_reading(None)
             self._refresh_rates(now)
             return
 
@@ -339,7 +336,6 @@ class ExpRateApp:
             if self.locator.state == LocatorState.LOCKED and virtual_ocr is not None:
                 self._consume_crop(grab_region(*virtual_ocr), now)
             else:
-                self._set_live_reading(None)
                 self._refresh_rates(now)
             return
 
@@ -350,18 +346,12 @@ class ExpRateApp:
             if found:
                 self._consume_crop(crop, now)
             else:
-                self._set_live_reading(None)
                 self._refresh_rates(now)
 
-    def _set_live_reading(self, reading: ExpReading | None) -> None:
-        if reading is None:
-            self._last_exp = None
-            self._last_percent = None
+    def _accept_percent(self, reading: ExpReading | None) -> None:
+        if reading is None or reading.exp != self.current.last_exp:
             return
-        self._last_exp = reading.exp
-        self._last_percent = reading.percent
-        self._eta_exp = reading.exp
-        self._eta_percent = reading.percent
+        self._accepted_percent = reading.percent
 
     def _consume_crop(self, crop, now: float) -> None:
         self._update_preview(crop)
@@ -369,7 +359,7 @@ class ExpRateApp:
         exp = None if reading is None else reading.exp
         self.current.tick(exp, now)
         self.session.tick(exp, now)
-        self._set_live_reading(reading)
+        self._accept_percent(reading)
         self._refresh_rates(now)
 
     def _update_preview(self, crop_bgr) -> None:

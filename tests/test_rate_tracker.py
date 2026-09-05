@@ -14,7 +14,8 @@ class HourlyRateTests(unittest.TestCase):
     def test_first_gain_scales_to_hourly_rates(self):
         tracker = RateTracker()
         tracker.tick(1000, now=0.0)
-        rates = tracker.tick(1500, now=1.0)
+        tracker.tick(1500, now=1.0)
+        rates = tracker.hourly_rates(2.0)
         self.assertEqual(rates.per_sec, 500)
         self.assertEqual(rates.per_min, 30000)
         self.assertEqual(rates.per_5min, 150000)
@@ -54,9 +55,9 @@ class HourlyRateTests(unittest.TestCase):
         tracker = RateTracker()
         tracker.tick(25852, now=0.0)
         tracker.tick(2586, now=1.0)
-        rates = tracker.tick(25863, now=2.0)
+        tracker.tick(25863, now=2.0)
         self.assertEqual(tracker.last_exp, 25863)
-        self.assertGreater(rates.per_min, 0)
+        self.assertGreater(tracker.hourly_rates(3.0).per_min, 0)
 
     def test_steady_gains_average_over_elapsed_time(self):
         tracker = RateTracker()
@@ -99,7 +100,7 @@ class HistoryPersistTests(unittest.TestCase):
             first.tick(1000, now=1_700_000_000.0)
             first.tick(1100, now=1_700_000_001.0)
             second = RateTracker(history_path=path)
-            rates = second.hourly_rates(1_700_000_001.0)
+            rates = second.hourly_rates(1_700_000_002.0)
             self.assertEqual(second.last_exp, 1100)
             self.assertEqual(rates.per_min, 6000)
             lines = path.read_text(encoding="utf-8").strip().splitlines()
@@ -140,9 +141,9 @@ class HistoryPersistTests(unittest.TestCase):
         tracker.tick(1100, now=1.0)
         tracker.clear()
         tracker.tick(2000, now=2.0)
-        rates = tracker.tick(2100, now=3.0)
+        tracker.tick(2100, now=3.0)
         self.assertEqual(tracker.last_exp, 2100)
-        self.assertEqual(rates.per_min, 6000)
+        self.assertEqual(tracker.hourly_rates(4.0).per_min, 6000)
 
     def test_timestamp_is_serialized_with_six_decimals(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -217,20 +218,20 @@ class OcrRecoveryTests(unittest.TestCase):
         tracker = RateTracker()
         tracker.tick(33252, now=0.0)
         tracker.tick(325, now=1.0)
-        rates = tracker.tick(33402, now=2.0)
+        tracker.tick(33402, now=2.0)
         self.assertEqual(tracker.last_exp, 33402)
         self.assertEqual(tracker.total_gained(), 150)
-        self.assertEqual(rates.per_min, 9000)
+        self.assertEqual(tracker.hourly_rates(3.0).per_min, 9000)
 
     def test_truncated_drop_with_small_blip_still_recovers(self):
         tracker = RateTracker()
         tracker.tick(44356, now=0.0)
         tracker.tick(420, now=1.0)
         tracker.tick(499, now=2.0)
-        rates = tracker.tick(44531, now=3.0)
+        tracker.tick(44531, now=3.0)
         self.assertEqual(tracker.last_exp, 44531)
         self.assertEqual(tracker.total_gained(), 175)
-        self.assertEqual(rates.per_min, 10500)
+        self.assertEqual(tracker.hourly_rates(4.0).per_min, 10500)
 
     def test_confirmed_level_up_keeps_the_new_baseline(self):
         tracker = RateTracker()
@@ -250,10 +251,10 @@ class OcrRecoveryTests(unittest.TestCase):
         tracker.tick(516, now=1.0)
         tracker.tick(581, now=2.0)
         tracker.tick(590, now=3.0)
-        rates = tracker.tick(55604, now=4.0)
+        tracker.tick(55604, now=4.0)
         self.assertEqual(tracker.last_exp, 55604)
         self.assertEqual(tracker.total_gained(), 107)
-        self.assertEqual(rates.per_min, 6420)
+        self.assertEqual(tracker.hourly_rates(5.0).per_min, 6420)
 
     def test_truncated_baseline_recovers_to_full_value_without_huge_gain(self):
         tracker = RateTracker()
@@ -282,9 +283,9 @@ class OcrRecoveryTests(unittest.TestCase):
     def test_same_order_of_magnitude_gain_is_still_counted(self):
         tracker = RateTracker()
         tracker.tick(100, now=0.0)
-        rates = tracker.tick(1100, now=1.0)
+        tracker.tick(1100, now=1.0)
         self.assertEqual(tracker.last_exp, 1100)
-        self.assertEqual(rates.per_min, 60000)
+        self.assertEqual(tracker.hourly_rates(2.0).per_min, 60000)
 
 
 class SanitizeExpSeriesTests(unittest.TestCase):

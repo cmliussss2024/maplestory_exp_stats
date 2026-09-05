@@ -192,6 +192,7 @@ class RateTracker:
         self._first_gain_at: float | None = None
         self._last_gain_at: float | None = None
         self._paused: float = 0.0
+        self._resumed_at: float | None = None
         self._gains: deque[tuple[float, int]] = deque()
         if self.history_path is not None:
             self._load_history()
@@ -206,12 +207,10 @@ class RateTracker:
 
     def hourly_rates(self, now: float) -> Rates:
         self._refresh(now)
-        if self._first_gain_at is None:
-            return Rates(0, 0, 0, 0)
         gained = self.total_gained()
-        if gained <= 0:
+        elapsed = self._elapsed_at(now)
+        if elapsed is None or elapsed < 1.0 or gained <= 0:
             return Rates(0, 0, 0, 0)
-        elapsed = max(now - self._first_gain_at - self._paused, 1.0)
         return Rates(
             per_sec=int(round(gained / elapsed)),
             per_min=int(round(gained * 60.0 / elapsed)),
@@ -220,9 +219,20 @@ class RateTracker:
         )
 
     def elapsed_since_first_gain(self, now: float) -> float | None:
+        self._refresh(now)
+        return self._elapsed_at(now)
+
+    def _elapsed_at(self, now: float) -> float | None:
         if self._first_gain_at is None:
             return None
-        return max(now - self._first_gain_at - self._paused, 0.0)
+        elapsed = now - self._first_gain_at
+        if (
+            self._resumed_at is not None
+            and self._first_gain_at < self._resumed_at
+            and now >= self._resumed_at
+        ):
+            elapsed -= self._paused
+        return max(elapsed, 0.0)
 
     def total_gained(self) -> int:
         return sum(delta for _ts, delta in self._gains)
@@ -233,6 +243,7 @@ class RateTracker:
         self._first_gain_at = None
         self._last_gain_at = None
         self._paused = 0.0
+        self._resumed_at = None
         self._gains.clear()
         if self.history_path is None:
             return
@@ -281,8 +292,8 @@ class RateTracker:
             while idx < len(gains) and gains[idx][0] <= sample:
                 running += gains[idx][1]
                 idx += 1
-            elapsed = sample - (first or sample) - self._paused
-            if first is None or sample <= first or running <= 0 or elapsed <= 0:
+            elapsed = self._elapsed_at(sample)
+            if first is None or sample <= first or running <= 0 or elapsed is None or elapsed <= 0:
                 values.append(0)
                 continue
             values.append(int(round(running / max(elapsed, 1.0))))
@@ -330,9 +341,11 @@ class RateTracker:
         if self._points:
             last_t = self._points[-1].t
             self._refresh(last_t)
-            gap = time.time() - last_t
+            resumed = time.time()
+            gap = resumed - last_t
             if gap > 0:
                 self._paused = gap
+                self._resumed_at = resumed
 
 
 def eta_to_level(

@@ -150,11 +150,7 @@ class SearchFunnelTests(unittest.TestCase):
 
     def test_neighborhood_preferred_over_monitor_scan(self):
         grabs: list[tuple[int, int, int, int]] = []
-        # last_rect (100,100,121,34) + pad 300 → clamp to 800x600 monitor
-        # left=0, top=0, width=min(421,800)=421? lx-pad=-200 → clamp 0, ly-pad=-200 → 0
-        # width = 121+600=721, height=34+600=634 → clamp to 800x600 → 800x600 full?
-        # Actually: left max(-200,0)=0, top=0, right min(-200+721,800)=521, bottom min(-200+634,600)=434
-        # so region 0,0,521,434
+        # last_rect (100,100,121,34) + pad 300 → neighborhood region (0,0,521,434)
         pad_canvas = np.zeros((434, 521, 3), dtype=np.uint8)
         self._paste(pad_canvas, 100, 100)
 

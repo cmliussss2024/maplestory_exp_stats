@@ -23,7 +23,6 @@ from ui import ExpRateWindow, WINDOW_PATH, paint_chart
 from ui.drawing import fit_image
 from ui.styles import Spacing, Type
 from ui.views.overlay_window import OverlayWindow
-from ui.overlay_log import overlay_log
 from vision import (
     grab_region,
     label_present,
@@ -150,14 +149,6 @@ class ExpRateApp:
             return
         self.root.update_idletasks()
         x, y = self.root.winfo_x(), self.root.winfo_y()
-        overlay_log(
-            "enter_float",
-            x=x,
-            y=y,
-            scale=round(self._overlay_scale, 4),
-            root=self.root.geometry(),
-            tk_in=round(float(self.root.winfo_fpixels("1i")), 2),
-        )
         self._float = OverlayWindow(
             self.root,
             vars_map=self.current_vars,
@@ -173,7 +164,6 @@ class ExpRateApp:
         self._float = None
         pos = overlay.position() if overlay is not None else None
         if overlay is not None:
-            overlay_log("exit_float", scale=round(overlay.scale, 4), pos=pos)
             self._overlay_scale = overlay.scale
             overlay.destroy()
         self.root.deiconify()
@@ -225,7 +215,6 @@ class ExpRateApp:
         if self._float is not None:
             pos = self._float.position()
             overlay = self._float
-            overlay_log("close_float", scale=round(overlay.scale, 4), pos=pos)
             self._overlay_scale = overlay.scale
             self._float = None
             overlay.destroy()
@@ -321,8 +310,8 @@ class ExpRateApp:
         self._busy = True
         try:
             self._scan_once()
-        except Exception as exc:
-            overlay_log("scan_error", error=repr(exc))
+        except Exception:
+            pass
         finally:
             self._busy = False
             if self._closed or not self.root.winfo_exists():

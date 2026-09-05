@@ -19,7 +19,7 @@
 
 `RateTracker` 只做三件事：追加原始点、把 `{t, exp}` 写入 jsonl、每次 tick/加载调用该函数并采用返回的 gains。
 
-`SanitizedExp` 至少包含：`last_exp`、`gains`（`(t, delta)`）、`first_gain_at`、`last_gain_at`、`last_gain`。图表和速率仍只消费 gains，不读原始低谷。
+`SanitizedExp` 至少包含：`last_exp`、`gains`（`(t, delta)`）、`first_gain_at`、`last_gain_at`。图表和速率只消费 gains，不读原始低谷。
 
 ## 落盘
 

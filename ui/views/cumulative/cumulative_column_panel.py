@@ -8,7 +8,7 @@ from typing import Any
 import tkinter as tk
 from tkinter import ttk
 
-from ui.styles import Spacing, Type
+from ui.styles import Spacing
 from ui.views.cumulative.cumulative_row_cell import CumulativeRowCell
 from ui.views.panel import Panel
 
@@ -26,18 +26,6 @@ class CumulativeColumnPanel(Panel):
         **kwargs: Any,
     ) -> None:
         super().__init__(master, use_debug=False, **kwargs)
-        # ttk.Label(
-        #     self,
-        #     text="累计",
-        #     font=Type.Cumulative.header,
-        #     foreground=Type.Cumulative.header_color,
-        # ).pack(anchor="w")
-        # ttk.Label(
-        #     self,
-        #     text="~",
-        #     font=Type.Cumulative.hint,
-        #     foreground=Type.Cumulative.hint_color,
-        # ).pack(anchor="w", pady=Spacing.Cumulative.hint_pad_y)
         rows = (
             ("累计经验", session_exp, ""),
             ("累计时长", session_time, ""),

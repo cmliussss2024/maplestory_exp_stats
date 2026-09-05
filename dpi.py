@@ -5,7 +5,7 @@ the window sits on a 150% display (or whenever capture temporarily switches
 the thread). Tk then rebuilds the layout: the window shrinks and flickers.
 
 The process stays DPI-unaware. mss grabs that need physical pixels run on a
-worker thread via physical_call. Graphics Capture runs on the caller thread.
+worker thread via physical_call.
 """
 
 from __future__ import annotations
@@ -21,11 +21,6 @@ _user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
 _user32.SetProcessDpiAwarenessContext.restype = ctypes.c_int
 _user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
 _user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
-_user32.LogicalToPhysicalPointForPerMonitorDPI.argtypes = [
-    wintypes.HWND,
-    ctypes.POINTER(wintypes.POINT),
-]
-_user32.LogicalToPhysicalPointForPerMonitorDPI.restype = wintypes.BOOL
 
 _UNAWARE_GDISCALED = ctypes.c_void_p(-5)
 _UNAWARE = ctypes.c_void_p(-1)
@@ -45,18 +40,9 @@ def disable_per_monitor_dpi() -> None:
         pass
 
 
-def logical_to_physical(hwnd: int, x: int, y: int) -> tuple[int, int]:
-    point = wintypes.POINT(int(x), int(y))
-    if not _user32.LogicalToPhysicalPointForPerMonitorDPI(hwnd, ctypes.byref(point)):
-        return int(x), int(y)
-    return int(point.x), int(point.y)
-
-
 def dpi_scale(hwnd: int, x: int = 0, y: int = 0) -> float:
     """Physical pixels per logical pixel on the monitor that contains the window.
 
-    Do not use LogicalToPhysicalPoint spanning 1000px: on a secondary display
-    (negative virtual coords) that ratio comes back inverted (e.g. 0.245).
     GetDpiForWindow is 96 for a DPI-unaware HWND, so ask the monitor instead.
     """
     try:

@@ -11,7 +11,6 @@ import tkinter as tk
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from ui.layered import blit_layered, enable_layered, hwnd_of
-from ui.overlay_log import overlay_log, overlay_log_session
 from ui.styles import Spacing, Type
 from dpi import dpi_scale
 
@@ -89,9 +88,6 @@ class OverlayWindow:
         self._last_blit_key: tuple[int, int, int, int] | None = None
         self._input_dpi = 1.0
 
-        overlay_log_session()
-        overlay_log("overlay_init", x=x, y=y, scale=round(self._scale, 4))
-
         win = tk.Toplevel(master)
         self._win = win
         win.withdraw()
@@ -105,7 +101,6 @@ class OverlayWindow:
         win.bind("<ButtonRelease-1>", self._on_release)
         win.bind("<Configure>", self._on_configure)
         win.bind("<Expose>", self._on_expose)
-        win.bind("<Map>", self._on_map)
         win.bind("<Destroy>", self._on_destroyed)
 
         for key, _unit in _ROWS:
@@ -118,7 +113,6 @@ class OverlayWindow:
         self._hwnd = hwnd_of(win)
         enable_layered(self._hwnd)
         self._refresh_input_dpi()
-        overlay_log("overlay_mapped", hwnd=self._hwnd, **self._snap())
         self._blit("mapped")
         win.lift()
 
@@ -134,7 +128,6 @@ class OverlayWindow:
         for var, trace_id in self._traces:
             var.trace_remove("write", trace_id)
         self._traces.clear()
-        overlay_log("overlay_destroy", **self._snap())
         if self._win.winfo_exists():
             self._win.destroy()
 
@@ -146,35 +139,6 @@ class OverlayWindow:
 
     def _panel_margin(self) -> int:
         return Spacing.Overlay.shadow_blur * 2
-
-    def _snap(self) -> dict[str, object]:
-        data: dict[str, object] = {
-            "scale": round(self._scale, 4),
-            "in_dpi": round(self._input_dpi, 4),
-            "xy": f"{self._x},{self._y}",
-            "hover": int(self._hover),
-            "drag": int(self._drag is not None),
-            "resize": int(self._resize is not None),
-            "blitting": int(self._blitting),
-        }
-        if self._image is not None:
-            data["img"] = f"{self._image.width}x{self._image.height}"
-            margin = self._panel_margin()
-            data["panel"] = (
-                f"{self._x + margin},{self._y + margin},"
-                f"{self._image.width - margin * 2}x{self._image.height - margin * 2}"
-            )
-        try:
-            if self._win.winfo_exists():
-                data["geom"] = self._win.geometry()
-                data["winfo"] = (
-                    f"{self._win.winfo_x()},{self._win.winfo_y()} "
-                    f"{self._win.winfo_width()}x{self._win.winfo_height()}"
-                )
-                data["rootxy"] = f"{self._win.winfo_rootx()},{self._win.winfo_rooty()}"
-        except tk.TclError:
-            pass
-        return data
 
     def _refresh_input_dpi(self) -> None:
         if self._hwnd is None:
@@ -212,7 +176,6 @@ class OverlayWindow:
         self._hover = hovered
         if hovered:
             self._refresh_input_dpi()
-        overlay_log("hover", **self._snap())
         self._redraw("hover")
 
     def _pointer_inside(self) -> bool:
@@ -270,22 +233,6 @@ class OverlayWindow:
     def _on_press(self, event: tk.Event) -> None:
         self._refresh_input_dpi()
         self._set_hover(True)
-        ix, iy = self._image_xy(event)
-        hit = "move"
-        if self._in_box(event, self._restore_box):
-            hit = "restore"
-        elif self._in_box(event, self._resize_box):
-            hit = "resize"
-        overlay_log(
-            "press",
-            hit=hit,
-            mouse=f"{event.x_root},{event.y_root}",
-            local=f"{event.x},{event.y}",
-            imgxy=f"{ix:.1f},{iy:.1f}",
-            restore=self._restore_box,
-            grip=self._resize_box,
-            **self._snap(),
-        )
         if self._in_box(event, self._restore_box):
             self._drag = None
             self._resize = None
@@ -303,16 +250,9 @@ class OverlayWindow:
                 event.y_root - origin_y,
                 self._scale,
             )
-            overlay_log(
-                "resize_start",
-                origin=f"{origin_x},{origin_y}",
-                start=f"{self._resize[2]:.1f},{self._resize[3]:.1f}",
-                **self._snap(),
-            )
             return
         self._resize = None
         self._drag = (event.x_root - self._x, event.y_root - self._y)
-        overlay_log("move_start", **self._snap())
 
     def _on_drag(self, event: tk.Event) -> None:
         if self._resize is not None:
@@ -336,23 +276,16 @@ class OverlayWindow:
 
     def _on_release(self, _event: tk.Event) -> None:
         was_resize = self._resize is not None
-        overlay_log("release", was_resize=int(was_resize), **self._snap())
         self._drag = None
         self._resize = None
         self._refresh_input_dpi()
         if was_resize:
             quantized = round(self._scale, 2)
             if quantized != self._scale:
-                overlay_log("resize_quantize", from_scale=round(self._scale, 4), to=quantized)
                 self._scale = quantized
             self._redraw("resize_end")
         if not self._pointer_inside():
             self._set_hover(False)
-
-    def _on_map(self, event: tk.Event) -> None:
-        if event.widget is not self._win:
-            return
-        overlay_log("map", **self._snap())
 
     def _on_configure(self, event: tk.Event) -> None:
         if event.widget is not self._win:
@@ -379,12 +312,6 @@ class OverlayWindow:
         last = self._last_blit_key
         if why in {"configure", "expose", "var"} and key == last:
             return
-        overlay_log(
-            "blit",
-            why=why,
-            src=f"{image.width}x{image.height}",
-            **self._snap(),
-        )
         self._last_blit_key = key
         blit_layered(hwnd, image)
 
@@ -394,8 +321,6 @@ class OverlayWindow:
         before = None if self._image is None else self._image.size
         self._image = self._render()
         width, height = self._image.size
-        if why != "var" or before != (width, height):
-            overlay_log("redraw", why=why, **self._snap())
         if self._resize is None:
             if why == "var" and before == (width, height):
                 self._blit(why)

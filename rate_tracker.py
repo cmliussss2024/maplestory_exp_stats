@@ -20,7 +20,6 @@ class SanitizedExp:
     gains: tuple[tuple[float, int], ...]
     first_gain_at: float | None
     last_gain_at: float | None
-    last_gain: int
 
 
 @dataclass(frozen=True)
@@ -121,7 +120,7 @@ def _is_recovery_jump(a_exp: int, v_exp: int, c_exp: int) -> bool:
 
 def sanitize_exp_series(points: Sequence[ExpPoint], now: float) -> SanitizedExp:
     if not points:
-        return SanitizedExp(None, (), None, None, 0)
+        return SanitizedExp(None, (), None, None)
 
     accepted: list[ExpPoint] = []
     gains: list[tuple[float, int]] = []
@@ -177,8 +176,7 @@ def sanitize_exp_series(points: Sequence[ExpPoint], now: float) -> SanitizedExp:
     last_exp = accepted[-1].exp
     first_gain_at = gains[0][0] if gains else None
     last_gain_at = gains[-1][0] if gains else None
-    last_gain = gains[-1][1] if gains else 0
-    return SanitizedExp(last_exp, tuple(gains), first_gain_at, last_gain_at, last_gain)
+    return SanitizedExp(last_exp, tuple(gains), first_gain_at, last_gain_at)
 
 
 class RateTracker:

@@ -11,6 +11,7 @@ data/exp_history.jsonl
 data/window.json
 data/overlay-debug.log
 data/crash.log
+data/debug_search/
 
 Thumbs.db
 Desktop.ini

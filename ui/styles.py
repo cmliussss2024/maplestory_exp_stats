@@ -39,7 +39,6 @@ class Spacing:
         cell_spacing = 2
         value_unit_gap = 4
         clear_pad_y = (4, 4)
-        hint_pad_y = (0, 2)
 
     class Info:
         cell_spacing = 4
@@ -101,10 +100,6 @@ class Type:
         unit_color = Color.tertiary
 
     class Cumulative:
-        header = (_FAMILY, 13, "bold")
-        header_color = Color.primary
-        hint = (_FAMILY, 9)
-        hint_color = Color.tertiary
         caption = (_FAMILY, 10)
         caption_color = Color.primary
         value = (_FAMILY, 13, "bold")

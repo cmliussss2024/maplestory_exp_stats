@@ -10,15 +10,12 @@ from pathlib import Path
 import tkinter as tk
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from rate_tracker import RATE_ROWS
 from ui.layered import blit_layered, enable_layered, hwnd_of
 from ui.styles import Spacing, Type
 from dpi import dpi_scale
 
-_ROWS = (
-    ("per_sec", "/秒"),
-    ("per_5min", "/5分"),
-    ("per_hour", "/时"),
-)
+_ROWS = tuple((key, unit) for key, unit in RATE_ROWS if key != "per_min")
 
 _WIN_FONTS = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
 

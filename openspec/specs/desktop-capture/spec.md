@@ -22,7 +22,7 @@ While the locator is locked, the system MUST capture only the locked EXP-bar rec
 
 ### Requirement: Search uses a multi-monitor funnel
 
-While searching or relocating, the system MUST search physical monitors individually (`monitors[1..n]`), not the virtual-desktop bounding box (`monitors[0]`). Search MUST follow this order and stop at the first label match: (1) if a last-known locked rectangle exists, a neighborhood around that rectangle; (2) for each physical monitor in preference order (last-hit monitor first, then others): match the bottom HUD band, and if that misses match the remaining upper portion of the same monitor before moving on. On a successful match the system MUST record the hit monitor index for the next search preference and store the locked OCR rectangle in virtual-screen coordinates.
+While searching or relocating, the system MUST search physical monitors individually (`monitors[1..n]`), not the virtual-desktop bounding box (`monitors[0]`). Search MUST follow this order: (1) if a last-known locked rectangle exists, a neighborhood around that rectangle; (2) for each physical monitor in preference order (last-hit monitor first, then others): match the bottom HUD band, and if that misses match the remaining upper portion of the same monitor before moving on. A hit at or above the confident-match score MUST lock immediately and skip later bands. A hit that only meets the match threshold MUST be kept as a candidate while the funnel continues, and the highest-scoring candidate MUST win, so IDE or sidebar EXP text does not beat a later game label. On a successful match the system MUST record the hit monitor index for the next search preference and store the locked OCR rectangle in virtual-screen coordinates.
 
 #### Scenario: Relocate prefers neighborhood then last monitor
 
@@ -36,8 +36,13 @@ While searching or relocating, the system MUST search physical monitors individu
 
 #### Scenario: Common case stops on bottom band
 
-- **WHEN** searching and the EXP label lies in the bottom HUD band of the preferred monitor
+- **WHEN** searching and the EXP label lies in the bottom HUD band of the preferred monitor with a confident match score
 - **THEN** the system locks after the bottom-band match and does not capture that monitor’s upper remainder
+
+#### Scenario: Weak match continues the funnel
+
+- **WHEN** a neighborhood or bottom-band hit meets the match threshold but is below the confident-match score
+- **THEN** the system keeps that hit as a candidate, continues later bands or monitors, and locks the highest-scoring hit
 
 #### Scenario: Hit updates last-hit monitor
 

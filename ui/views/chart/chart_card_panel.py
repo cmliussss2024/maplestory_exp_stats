@@ -37,6 +37,3 @@ class ChartCardPanel(Panel):
             highlightbackground=Type.Chart.canvas_border,
         )
         self.canvas.pack(pady=(0, bottom_pad))
-
-    def set_title(self, title: str) -> None:
-        self._title.configure(text=title)

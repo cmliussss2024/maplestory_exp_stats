@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Callable
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -38,6 +39,7 @@ _SCALES_1_5 = (1.5, 1.35, 1.6, 1.75, 1.25)
 
 _ocr: RapidOCR | None = None
 _label_bgr: np.ndarray | None = None
+_tls = threading.local()
 
 GrabFn = Callable[[int, int, int, int], np.ndarray]
 MonitorsFn = Callable[[], list[dict[str, int]]]
@@ -192,15 +194,23 @@ def grab_region(left: int, top: int, width: int, height: int) -> np.ndarray:
     return physical_call(_mss_grab_impl, left, top, width, height)
 
 
-def _mss_grab_impl(left: int, top: int, width: int, height: int) -> np.ndarray:
-    # mss GDI handles are thread-affine; physical_call uses a fresh worker each
-    # time, so the instance must be created on that same worker thread.
+def _thread_mss():
     import mss
 
-    with mss.mss() as sct:
-        frame = np.array(
-            sct.grab({"left": left, "top": top, "width": max(1, width), "height": max(1, height)})
-        )
+    sct = getattr(_tls, "sct", None)
+    if sct is None:
+        sct = mss.mss()
+        _tls.sct = sct
+    return sct
+
+
+def _mss_grab_impl(left: int, top: int, width: int, height: int) -> np.ndarray:
+    # mss GDI handles are thread-affine. physical_call keeps one worker, so this
+    # instance stays on that thread for the process lifetime.
+    sct = _thread_mss()
+    frame = np.array(
+        sct.grab({"left": left, "top": top, "width": max(1, width), "height": max(1, height)})
+    )
     return frame[:, :, :3]
 
 
@@ -211,20 +221,18 @@ def list_physical_monitors() -> list[dict[str, int]]:
 
 
 def _list_monitors_impl() -> list[dict[str, int]]:
-    import mss
-
-    with mss.mss() as sct:
-        monitors: list[dict[str, int]] = []
-        for index, monitor in enumerate(sct.monitors[1:], start=1):
-            monitors.append(
-                {
-                    "index": index,
-                    "left": int(monitor["left"]),
-                    "top": int(monitor["top"]),
-                    "width": int(monitor["width"]),
-                    "height": int(monitor["height"]),
-                }
-            )
+    sct = _thread_mss()
+    monitors: list[dict[str, int]] = []
+    for index, monitor in enumerate(sct.monitors[1:], start=1):
+        monitors.append(
+            {
+                "index": index,
+                "left": int(monitor["left"]),
+                "top": int(monitor["top"]),
+                "width": int(monitor["width"]),
+                "height": int(monitor["height"]),
+            }
+        )
     return monitors
 
 

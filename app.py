@@ -234,8 +234,10 @@ class ExpRateApp:
 
     def clear_session(self) -> None:
         self.session.clear()
-        self._refresh_rates(time.time())
-        self._redraw_chart(time.time())
+        self.current.clear()
+        now = time.time()
+        self._refresh_rates(now)
+        self._redraw_chart(now)
 
     def _status_detail(self, now: float | None = None) -> str:
         state = self.locator.state
@@ -326,8 +328,7 @@ class ExpRateApp:
             return
 
         if self.locator.state in (LocatorState.SEARCHING, LocatorState.RELOCATING):
-            self.window.info_section.set_preview_visible(False)
-            self.root.update_idletasks()
+            self.window.info_section.flush_hidden_preview(self.root)
             virtual_ocr, monitor_index = search_exp_label(
                 last_rect=self.locator.last_rect,
                 last_monitor_index=self.locator.last_monitor_index,

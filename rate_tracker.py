@@ -233,6 +233,7 @@ class RateTracker:
         if self._first_gain_at is None:
             return None
         elapsed = now - self._first_gain_at
+        # Offline gap is subtracted only at/after resume. See docs/charts.md.
         if (
             self._resumed_at is not None
             and self._first_gain_at < self._resumed_at

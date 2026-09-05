@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from collections.abc import Callable
 from typing import Any
 
@@ -67,6 +68,19 @@ class InfoSectionPanel(SectionPanel):
                 self._image_id,
                 state="normal" if visible else "hidden",
             )
+
+    def flush_hidden_preview(self, root: tk.Misc) -> None:
+        """Hide the crop and pump paint so a desktop grab cannot see it."""
+        self.set_preview_visible(False)
+        self.image_canvas.update_idletasks()
+        try:
+            hwnd = int(self.image_canvas.winfo_id())
+            user32 = ctypes.windll.user32
+            user32.InvalidateRect(hwnd, None, True)
+            user32.UpdateWindow(hwnd)
+        except Exception:
+            pass
+        root.update()
 
     def set_image(self, photo: tk.PhotoImage) -> None:
         state = "normal" if self._preview_visible else "hidden"

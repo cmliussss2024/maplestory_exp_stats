@@ -22,10 +22,10 @@ class RateSectionPanel(SectionPanel):
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
-        self.forecast = RateColumnPanel(
+        self.column = RateColumnPanel(
             self.content,
             vars_map=current_vars,
             on_clear=on_clear_current,
             on_float=on_float,
         )
-        self.forecast.pack(fill="x")
+        self.column.pack(fill="x")

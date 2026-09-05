@@ -8,6 +8,12 @@ from dpi import disable_per_monitor_dpi
 
 disable_per_monitor_dpi()
 
+import os
+
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 import math
 import time
 import tkinter as tk
@@ -50,6 +56,11 @@ STATUS_COLOR = {
     LocatorState.RELOCATING: Type.Info.status_search,
     LocatorState.FAILED: Type.Info.status_error,
 }
+
+
+def _set_var(var: tk.StringVar, value: str) -> None:
+    if var.get() != value:
+        var.set(value)
 
 
 def _fmt(value: int | None) -> str:
@@ -97,6 +108,7 @@ class ExpRateApp:
         self._last_total_series: tuple | None = None
         self._float: OverlayWindow | None = None
         self._overlay_scale = 1.0
+        self._last_lock_crop: bytes | None = None
 
         self.current_vars = {key: tk.StringVar(value="0") for key, _label in RATE_ROWS}
         self.current_exp = tk.StringVar(value="-")
@@ -223,6 +235,7 @@ class ExpRateApp:
         self.root.destroy()
 
     def retry(self) -> None:
+        self._last_lock_crop = None
         self.locator.retry()
         self._refresh_status()
 
@@ -256,8 +269,8 @@ class ExpRateApp:
 
     def _refresh_status(self) -> None:
         state = self.locator.state
-        self.status.set(STATUS_TEXT[state])
-        self.status_detail.set(self._status_detail())
+        _set_var(self.status, STATUS_TEXT[state])
+        _set_var(self.status_detail, self._status_detail())
         self.status_label.configure(foreground=STATUS_COLOR[state])
         if state == LocatorState.FAILED:
             self.retry_btn.configure(state="normal")
@@ -266,27 +279,27 @@ class ExpRateApp:
         self.window.info_section.set_preview_visible(state == LocatorState.LOCKED)
 
     def _apply_column(self, vars_map: dict[str, tk.StringVar], rates: Rates) -> None:
-        vars_map["per_sec"].set(_fmt(rates.per_sec))
-        vars_map["per_min"].set(_fmt(rates.per_min))
-        vars_map["per_5min"].set(_fmt(rates.per_5min))
-        vars_map["per_hour"].set(_fmt(rates.per_hour))
+        _set_var(vars_map["per_sec"], _fmt(rates.per_sec))
+        _set_var(vars_map["per_min"], _fmt(rates.per_min))
+        _set_var(vars_map["per_5min"], _fmt(rates.per_5min))
+        _set_var(vars_map["per_hour"], _fmt(rates.per_hour))
 
     def _refresh_rates(self, now: float) -> None:
         self._apply_column(self.current_vars, self.current.hourly_rates(now))
         if self.current.last_exp is None:
             self._accepted_percent = None
-        self.current_exp.set(_fmt(self.current.last_exp))
-        self.current_percent.set(_fmt_percent(self._accepted_percent))
-        self.session_exp.set(_fmt(self.session.total_gained()))
-        self.session_rate.set(_fmt(self.session.hourly_rates(now).per_hour))
-        self.session_time.set(_fmt_duration(self.session.elapsed_since_first_gain(now)))
+        _set_var(self.current_exp, _fmt(self.current.last_exp))
+        _set_var(self.current_percent, _fmt_percent(self._accepted_percent))
+        _set_var(self.session_exp, _fmt(self.session.total_gained()))
+        _set_var(self.session_rate, _fmt(self.session.hourly_rates(now).per_hour))
+        _set_var(self.session_time, _fmt_duration(self.session.elapsed_since_first_gain(now)))
         eta = eta_to_level(
             self.current.last_exp,
             self._accepted_percent,
             self.current.total_gained(),
             self.current.elapsed_since_first_gain(now),
         )
-        self.level_eta.set(_fmt_duration(eta))
+        _set_var(self.level_eta, _fmt_duration(eta))
 
     def _ui_tick(self) -> None:
         if self._closed or not self.root.winfo_exists():
@@ -324,10 +337,10 @@ class ExpRateApp:
     def _scan_once(self) -> None:
         now = time.time()
         if self.locator.state == LocatorState.FAILED:
-            self._refresh_rates(now)
             return
 
         if self.locator.state in (LocatorState.SEARCHING, LocatorState.RELOCATING):
+            self._last_lock_crop = None
             self.window.info_section.flush_hidden_preview(self.root)
             virtual_ocr, monitor_index = search_exp_label(
                 last_rect=self.locator.last_rect,
@@ -336,18 +349,20 @@ class ExpRateApp:
             self.locator.on_search_result(virtual_ocr, monitor_index)
             if self.locator.state == LocatorState.LOCKED and virtual_ocr is not None:
                 self._consume_crop(grab_region(*virtual_ocr), now)
-            else:
-                self._refresh_rates(now)
             return
 
         if self.locator.state == LocatorState.LOCKED and self.locator.locked_rect is not None:
             crop = grab_region(*self.locator.locked_rect)
+            key = crop.tobytes()
+            if key == self._last_lock_crop:
+                self.locator.on_lock_check(True)
+                return
             found = label_present(crop)
             self.locator.on_lock_check(found)
             if found:
                 self._consume_crop(crop, now)
             else:
-                self._refresh_rates(now)
+                self._last_lock_crop = None
 
     def _accept_percent(self, reading: ExpReading | None) -> None:
         if reading is None or reading.exp != self.current.last_exp:
@@ -357,6 +372,9 @@ class ExpRateApp:
     def _consume_crop(self, crop, now: float) -> None:
         self._update_preview(crop)
         reading = read_exp_reading_from_bgr(crop)
+        # Only skip later ticks after a successful read. A static bar that
+        # failed OCR once must be retried, not cached as "unchanged".
+        self._last_lock_crop = crop.tobytes() if reading is not None else None
         exp = None if reading is None else reading.exp
         self.current.tick(exp, now)
         self.session.tick(exp, now)
@@ -422,8 +440,18 @@ def _report_crash(exc: BaseException) -> None:
         pass
 
 
+def _prefer_game_cpu() -> None:
+    """Stay below the game so a 1 Hz OCR tick does not steal a full timeslice."""
+    import ctypes
+
+    below_normal = 0x00004000
+    kernel32 = ctypes.windll.kernel32
+    kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), below_normal)
+
+
 def main() -> None:
     try:
+        _prefer_game_cpu()
         warmup()
         root = tk.Tk()
         ExpRateApp(root)

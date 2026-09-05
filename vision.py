@@ -56,10 +56,29 @@ def _load_label() -> np.ndarray:
     return _label_bgr
 
 
+def _make_ocr() -> RapidOCR:
+    # RapidOCR's OrtInferSession never sets intra_op threads (0 = all cores).
+    # Pin the session at construction so a 1 Hz read does not wake every core.
+    from onnxruntime import SessionOptions
+
+    original = SessionOptions.__init__
+
+    def limited(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        self.intra_op_num_threads = 1
+        self.inter_op_num_threads = 1
+
+    SessionOptions.__init__ = limited
+    try:
+        return RapidOCR(use_text_det=False, use_angle_cls=False)
+    finally:
+        SessionOptions.__init__ = original
+
+
 def get_ocr() -> RapidOCR:
     global _ocr
     if _ocr is None:
-        _ocr = RapidOCR(use_text_det=False, use_angle_cls=False)
+        _ocr = _make_ocr()
     return _ocr
 
 
@@ -152,8 +171,13 @@ def read_exp_reading_from_bgr(image_bgr: np.ndarray) -> ExpReading | None:
     readings: list[tuple[str, float]] = []
     for view in _ocr_views(image_bgr):
         text, conf = _ocr_text(view)
-        if text:
-            readings.append((text, conf))
+        if not text:
+            continue
+        readings.append((text, conf))
+        picked = pick_exp_reading(readings)
+        # Bracketed "EXP n [p%]" from the native row is enough; skip the 3x pass.
+        if picked is not None and "[" in text:
+            return picked
     return pick_exp_reading(readings)
 
 

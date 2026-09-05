@@ -83,6 +83,8 @@ class OverlayWindow:
         self._fonts: dict[tuple[int, bool], ImageFont.ImageFont] = {}
         self._hwnd: int | None = None
         self._last_blit_key: tuple[int, int, int, int] | None = None
+        self._last_var_key: tuple[str, ...] | None = None
+        self._var_redraw_job: str | None = None
         self._input_dpi = 1.0
 
         win = tk.Toplevel(master)
@@ -105,6 +107,7 @@ class OverlayWindow:
             self._traces.append((vars_map[key], trace_id))
 
         self._redraw("init")
+        self._last_var_key = self._var_key()
         win.deiconify()
         win.update_idletasks()
         self._hwnd = hwnd_of(win)
@@ -122,6 +125,12 @@ class OverlayWindow:
 
     def destroy(self) -> None:
         self._closed = True
+        if self._var_redraw_job is not None:
+            try:
+                self._win.after_cancel(self._var_redraw_job)
+            except tk.TclError:
+                pass
+            self._var_redraw_job = None
         for var, trace_id in self._traces:
             var.trace_remove("write", trace_id)
         self._traces.clear()
@@ -160,11 +169,28 @@ class OverlayWindow:
             self._fonts[key] = cached
         return cached
 
+    def _var_key(self) -> tuple[str, ...]:
+        return tuple(self._vars[key].get() for key, _unit in _ROWS)
+
     def _on_var(self, *_args: object) -> None:
         if self._closed or not self._win.winfo_exists():
             return
         if self._drag is not None or self._resize is not None:
             return
+        if self._var_redraw_job is not None:
+            return
+        self._var_redraw_job = self._win.after_idle(self._flush_var_redraw)
+
+    def _flush_var_redraw(self) -> None:
+        self._var_redraw_job = None
+        if self._closed or not self._win.winfo_exists():
+            return
+        if self._drag is not None or self._resize is not None:
+            return
+        key = self._var_key()
+        if key == self._last_var_key:
+            return
+        self._last_var_key = key
         self._redraw("var")
 
     def _set_hover(self, hovered: bool) -> None:

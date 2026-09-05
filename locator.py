@@ -12,12 +12,15 @@ class LocatorState(Enum):
 
 class Locator:
     SEARCH_FAIL_LIMIT = 20
-    LOCK_FAIL_LIMIT = 3
+    # Locked tick is 1s; this many consecutive misses ≈ mall / alt-tab grace before relocate.
+    LOCK_FAIL_LIMIT = 10
     SEARCH_INTERVAL_SECONDS = 3
 
     def __init__(self) -> None:
         self.state = LocatorState.SEARCHING
         self.locked_rect: tuple[int, int, int, int] | None = None
+        self.last_rect: tuple[int, int, int, int] | None = None
+        self.last_monitor_index: int | None = None
         self._search_misses = 0
         self._lock_misses = 0
 
@@ -25,11 +28,18 @@ class Locator:
     def search_misses(self) -> int:
         return self._search_misses
 
-    def on_search_result(self, rect: tuple[int, int, int, int] | None) -> None:
+    def on_search_result(
+        self,
+        rect: tuple[int, int, int, int] | None,
+        monitor_index: int | None = None,
+    ) -> None:
         if self.state not in (LocatorState.SEARCHING, LocatorState.RELOCATING):
             return
         if rect is not None:
             self.locked_rect = rect
+            self.last_rect = rect
+            if monitor_index is not None:
+                self.last_monitor_index = monitor_index
             self.state = LocatorState.LOCKED
             self._search_misses = 0
             self._lock_misses = 0
@@ -38,6 +48,8 @@ class Locator:
         if self._search_misses > self.SEARCH_FAIL_LIMIT:
             self.state = LocatorState.FAILED
             self.locked_rect = None
+            self.last_rect = None
+            self.last_monitor_index = None
 
     def on_lock_check(self, found: bool) -> None:
         if self.state != LocatorState.LOCKED:
@@ -55,5 +67,7 @@ class Locator:
     def retry(self) -> None:
         self.state = LocatorState.SEARCHING
         self.locked_rect = None
+        self.last_rect = None
+        self.last_monitor_index = None
         self._search_misses = 0
         self._lock_misses = 0

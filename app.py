@@ -25,13 +25,10 @@ from ui.styles import Spacing, Type
 from ui.views.overlay_window import OverlayWindow
 from ui.overlay_log import overlay_log
 from vision import (
-    capture_for_search,
-    find_label,
     grab_region,
     label_present,
-    label_rect_to_ocr_rect,
     read_exp_reading_from_bgr,
-    to_virtual_rect,
+    search_exp_label,
     warmup,
 )
 
@@ -225,12 +222,6 @@ class ExpRateApp:
             except tk.TclError:
                 pass
             setattr(self, attr, None)
-        try:
-            from window_capture import shutdown_capture
-
-            shutdown_capture()
-        except Exception:
-            pass
         if self._float is not None:
             pos = self._float.position()
             overlay = self._float
@@ -349,14 +340,13 @@ class ExpRateApp:
             return
 
         if self.locator.state in (LocatorState.SEARCHING, LocatorState.RELOCATING):
-            image, origin_x, origin_y = capture_for_search()
-            label_rect, _score = find_label(image)
-            virtual_ocr = None
-            if label_rect is not None:
-                h, w = image.shape[:2]
-                ocr_rect = label_rect_to_ocr_rect(label_rect, w, h)
-                virtual_ocr = to_virtual_rect(ocr_rect, (origin_x, origin_y))
-            self.locator.on_search_result(virtual_ocr)
+            self.window.info_section.set_preview_visible(False)
+            self.root.update_idletasks()
+            virtual_ocr, monitor_index = search_exp_label(
+                last_rect=self.locator.last_rect,
+                last_monitor_index=self.locator.last_monitor_index,
+            )
+            self.locator.on_search_result(virtual_ocr, monitor_index)
             if self.locator.state == LocatorState.LOCKED and virtual_ocr is not None:
                 self._consume_crop(grab_region(*virtual_ocr), now)
             else:

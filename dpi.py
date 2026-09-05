@@ -65,6 +65,22 @@ def dpi_scale(hwnd: int, x: int = 0, y: int = 0) -> float:
         return 1.0
 
 
+def dpi_scale_at(x: int, y: int) -> float:
+    """Physical pixels per logical pixel for the monitor containing a virtual-screen point."""
+    try:
+        return physical_call(_dpi_at_point, int(x), int(y))
+    except Exception:
+        return 1.0
+
+
+def _dpi_at_point(x: int, y: int) -> float:
+    _user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+    _user32.MonitorFromPoint.restype = ctypes.c_void_p
+    point = wintypes.POINT(int(x), int(y))
+    scale = _monitor_dpi(int(_user32.MonitorFromPoint(point, 2)))
+    return scale if scale > 0 else 1.0
+
+
 def _monitor_dpi(monitor: int) -> float:
     if not monitor:
         return 0.0

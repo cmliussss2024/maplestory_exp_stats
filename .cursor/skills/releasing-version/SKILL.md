@@ -85,7 +85,7 @@ Then:
 python -c "import shutil; shutil.make_archive('dist/MapleStoryExpStats-VERSION', 'zip', 'dist', 'MapleStoryExpStats')"
 ```
 
-Replace `VERSION` with the digits. Smoke: start `dist/MapleStoryExpStats/MapleStoryExpStats.exe`, wait ~15s, no `data/crash.log`, then stop it.
+Replace `VERSION` with the digits. Smoke: start `dist/MapleStoryExpStats/mses.exe`, wait ~15s, no `data/crash.log`, then stop it.
 
 ## GitHub Release
 

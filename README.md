@@ -15,7 +15,7 @@
 python scripts/pack.py
 ```
 
-产物在 `dist/MapleStoryExpStats/`。把整个文件夹拷走，双击 `MapleStoryExpStats.exe` 即可，不需要安装 Python。`data/`（窗口位置、经验历史）写在 exe 旁边。
+产物在 `dist/MapleStoryExpStats/`。把整个文件夹拷走，双击 `mses.exe` 即可，不需要安装 Python。`data/`（窗口位置、经验历史）写在 exe 旁边。
 
 需要 Windows 10 1803+。体积大约几百 MB（含 OCR 模型）。
 

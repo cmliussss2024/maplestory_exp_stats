@@ -28,12 +28,12 @@ from vision import (  # noqa: E402
     search_exp_label,
 )
 
-# EXP cell at 1080p 1x, relative to the 24x13 label: inset (7, 5), size 134x38.
-# Drops HUD chrome; keeps the dark rounded chip and the progress-bar cap.
-_BAR_INSET_X = 7 / 24
-_BAR_INSET_Y = 5 / 13
-_BAR_W = 134 / 24
-_BAR_H = 38 / 13
+# EXP cell at 1080p 1x, relative to the 24x13 label: inset (2, 4), size 174x39.
+# Flush to the yellow slot white border; drops HP/MP and mall.
+_BAR_INSET_X = 2 / 24
+_BAR_INSET_Y = 4 / 13
+_BAR_W = 174 / 24
+_BAR_H = 39 / 13
 
 
 def _clamp_rect(

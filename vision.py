@@ -20,13 +20,13 @@ from paths import assets_dir
 ASSETS = assets_dir()
 LABEL_PATH = ASSETS / "exp_label.png"
 
-# Locked crop relative to the EXP label: tight around text + yellow-green slot.
+# Locked crop relative to the EXP label: text row + yellow slot, no HP/MP/mall.
 # Native size is 1920x1080 on screen 2 @ 1x. Screen 1 1366x768 @ 1.5x matches at 1.5.
-LABEL_IN_BAR = (1, 2)
+LABEL_IN_BAR = (1, 3)
 MATCH_THRESHOLD = 0.90
 CONFIDENT_MATCH = 0.95
-OCR_WIDTH = 121
-OCR_HEIGHT = 34
+OCR_WIDTH = 172
+OCR_HEIGHT = 37
 TEXT_ROW_HEIGHT = 16
 OCR_UPSCALE = 3
 NEIGHBORHOOD_PAD = 300

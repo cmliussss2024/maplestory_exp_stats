@@ -43,7 +43,7 @@ class Spacing:
     class Info:
         cell_spacing = 4
         retry_preview_spacing = 8
-        # Logical 100% EXP crop is 121x34; keep the old 2x preview slot at all DPIs.
+        # Logical 100% EXP crop is 172x37; keep the 242x68 preview slot (fits the 340px window).
         preview_width = 242
         preview_height = 68
 

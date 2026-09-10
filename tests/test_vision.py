@@ -28,25 +28,25 @@ class VisionTests(unittest.TestCase):
         self.assertIsNotNone(rect)
         self.assertGreater(score, 0.8)
         x, y, _w, _h = rect
-        self.assertAlmostEqual(x, 80 + 7, delta=2)
-        self.assertAlmostEqual(y, 50 + 5, delta=2)
+        self.assertAlmostEqual(x, 80 + 2, delta=2)
+        self.assertAlmostEqual(y, 50 + 4, delta=2)
 
     def test_ocr_reads_integer_from_bar_image(self):
         from vision import read_exp_from_bgr
 
         bar = cv2.imread(str(ASSETS / "exp_bar.png"))
-        self.assertEqual(read_exp_from_bgr(bar), 176792)
+        self.assertEqual(read_exp_from_bgr(bar), 139391)
 
     def test_ocr_reads_integer_from_live_style_crop(self):
         from vision import read_exp_from_bgr
 
         crop = cv2.imread(str(ASSETS / "exp_ocr.png"))
         self.assertIsNotNone(crop)
-        self.assertEqual(read_exp_from_bgr(crop), 176155)
+        self.assertEqual(read_exp_from_bgr(crop), 139391)
 
     def test_ocr_rect_hugs_exp_slot(self):
         x, y, width, height = label_rect_to_ocr_rect((8, 8, 24, 13), 400, 200)
-        self.assertEqual((x, y, width, height), (7, 6, 121, 34))
+        self.assertEqual((x, y, width, height), (7, 5, 172, 37))
 
     def test_locked_crop_includes_full_yellow_green_slot(self):
         from vision import crop_bgr
@@ -62,7 +62,7 @@ class VisionTests(unittest.TestCase):
         ox, oy, rw, rh = rect
         self.assertGreater(ox, 80)
         self.assertGreater(oy, 50)
-        self.assertLess(ox + rw, 80 + w)
+        self.assertLessEqual(ox + rw, 80 + w)
         self.assertLess(oy + rh, 50 + h)
         crop = crop_bgr(screen, rect)
         _b, g, r = cv2.split(crop)

@@ -8,11 +8,17 @@ from typing import Any
 
 import tkinter as tk
 
+from PIL import ImageTk
+
 from ui import theme
 from ui.styles import Spacing
 from ui.views.info.info_row_cell import InfoRowCell
 from ui.views.info.retry_row_cell import RetryRowCell
 from ui.views.section_panel import SectionPanel
+
+# Tk's canvas takes any Tk image object, and Pillow's ``ImageTk.PhotoImage`` is a
+# separate class from ``tkinter.PhotoImage`` (no inheritance), so allow both.
+TkImage = tk.PhotoImage | ImageTk.PhotoImage
 
 
 class InfoSectionPanel(SectionPanel):
@@ -58,7 +64,7 @@ class InfoSectionPanel(SectionPanel):
             bd=0,
         )
         self.image_canvas.pack(pady=(Spacing.Info.retry_preview_spacing, 0))
-        self._photo: tk.PhotoImage | None = None
+        self._photo: TkImage | None = None
         self._image_id: int | None = None
         self._preview_visible = False
 
@@ -83,7 +89,7 @@ class InfoSectionPanel(SectionPanel):
             pass
         root.update()
 
-    def set_image(self, photo: tk.PhotoImage) -> None:
+    def set_image(self, photo: TkImage) -> None:
         state = "normal" if self._preview_visible else "hidden"
         if self._image_id is None:
             self._image_id = self.image_canvas.create_image(

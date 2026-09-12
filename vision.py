@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-import re
+import threading
+from collections.abc import Callable
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -19,27 +20,30 @@ from paths import assets_dir
 ASSETS = assets_dir()
 LABEL_PATH = ASSETS / "exp_label.png"
 
-# Locked crop relative to the EXP label: tight around text + yellow-green slot.
+# Locked crop relative to the EXP label: text row + yellow slot, no HP/MP/mall.
 # Native size is 1920x1080 on screen 2 @ 1x. Screen 1 1366x768 @ 1.5x matches at 1.5.
-LABEL_IN_BAR = (1, 2)
-MATCH_THRESHOLD = 0.78
-OCR_WIDTH = 121
-OCR_HEIGHT = 34
+LABEL_IN_BAR = (1, 3)
+MATCH_THRESHOLD = 0.90
+CONFIDENT_MATCH = 0.95
+OCR_WIDTH = 172
+OCR_HEIGHT = 37
 TEXT_ROW_HEIGHT = 16
 OCR_UPSCALE = 3
+NEIGHBORHOOD_PAD = 300
+BOTTOM_BAND_FRACTION = 0.30
 _LABEL_SCALES = (
     1.0, 1.25, 1.5, 1.75, 2.0, 0.75, 2.25, 2.5, 1.1, 1.35, 1.6, 1.85, 0.5, 3.0,
 )
-# Word-boundary MapleStory so Cursor "maplestory_exp_stats" is not a hit.
-_GAME_TITLE = re.compile(r"冒险岛|\bmaplestory\b", re.IGNORECASE)
-# Our window title contains 冒险岛; skip it or we capture ourselves.
-_OWN_TITLE = "冒险岛经验统计助手"
+_SCALES_1_0 = (1.0, 1.1, 0.75, 1.25, 1.35)
+_SCALES_1_5 = (1.5, 1.35, 1.6, 1.75, 1.25)
 
 _ocr: RapidOCR | None = None
 _label_bgr: np.ndarray | None = None
-_desktop_origin = (0, 0)
-_game_hwnd: int | None = None
-_last_game_hwnd: int | None = None
+_tls = threading.local()
+
+GrabFn = Callable[[int, int, int, int], np.ndarray]
+MonitorsFn = Callable[[], list[dict[str, int]]]
+DpiFn = Callable[[int, int], float]
 
 
 def _load_label() -> np.ndarray:
@@ -52,10 +56,29 @@ def _load_label() -> np.ndarray:
     return _label_bgr
 
 
+def _make_ocr() -> RapidOCR:
+    # RapidOCR's OrtInferSession never sets intra_op threads (0 = all cores).
+    # Pin the session at construction so a 1 Hz read does not wake every core.
+    from onnxruntime import SessionOptions
+
+    original = SessionOptions.__init__
+
+    def limited(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        self.intra_op_num_threads = 1
+        self.inter_op_num_threads = 1
+
+    SessionOptions.__init__ = limited
+    try:
+        return RapidOCR(use_text_det=False, use_angle_cls=False)
+    finally:
+        SessionOptions.__init__ = original
+
+
 def get_ocr() -> RapidOCR:
     global _ocr
     if _ocr is None:
-        _ocr = RapidOCR(use_text_det=False, use_angle_cls=False)
+        _ocr = _make_ocr()
     return _ocr
 
 
@@ -64,14 +87,23 @@ def warmup() -> None:
     _load_label()
 
 
-def find_label(screen_bgr: np.ndarray) -> tuple[tuple[int, int, int, int] | None, float]:
+def scales_for_dpi(dpi: float) -> tuple[float, ...]:
+    if dpi >= 1.35:
+        return _SCALES_1_5
+    return _SCALES_1_0
+
+
+def find_label(
+    screen_bgr: np.ndarray,
+    scales: tuple[float, ...] | None = None,
+) -> tuple[tuple[int, int, int, int] | None, float]:
     templ = _load_label()
     screen_g = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
     templ_g = cv2.cvtColor(templ, cv2.COLOR_BGR2GRAY)
     th0, tw0 = templ_g.shape
     best_val = -1.0
     best_rect: tuple[int, int, int, int] | None = None
-    for scale in _LABEL_SCALES:
+    for scale in scales if scales is not None else _LABEL_SCALES:
         tw = max(8, int(round(tw0 * scale)))
         th = max(6, int(round(th0 * scale)))
         if th > screen_g.shape[0] or tw > screen_g.shape[1]:
@@ -139,8 +171,13 @@ def read_exp_reading_from_bgr(image_bgr: np.ndarray) -> ExpReading | None:
     readings: list[tuple[str, float]] = []
     for view in _ocr_views(image_bgr):
         text, conf = _ocr_text(view)
-        if text:
-            readings.append((text, conf))
+        if not text:
+            continue
+        readings.append((text, conf))
+        picked = pick_exp_reading(readings)
+        # Bracketed "EXP n [p%]" from the native row is enough; skip the 3x pass.
+        if picked is not None and "[" in text:
+            return picked
     return pick_exp_reading(readings)
 
 
@@ -176,135 +213,186 @@ def _ocr_text(image_bgr: np.ndarray) -> tuple[str | None, float]:
 
 
 def grab_region(left: int, top: int, width: int, height: int) -> np.ndarray:
-    image = _grab_from_game_window(left, top, width, height)
-    if image is not None:
-        return image
-    return _grab_mss_region(left, top, width, height)
-
-
-def _grab_mss_region(left: int, top: int, width: int, height: int) -> np.ndarray:
     from dpi import physical_call
 
     return physical_call(_mss_grab_impl, left, top, width, height)
 
 
-def _mss_grab_impl(left: int, top: int, width: int, height: int) -> np.ndarray:
+def _thread_mss():
     import mss
 
-    with mss.mss() as sct:
-        frame = np.array(
-            sct.grab({"left": left, "top": top, "width": max(1, width), "height": max(1, height)})
-        )
+    sct = getattr(_tls, "sct", None)
+    if sct is None:
+        sct = mss.mss()
+        _tls.sct = sct
+    return sct
+
+
+def _mss_grab_impl(left: int, top: int, width: int, height: int) -> np.ndarray:
+    # mss GDI handles are thread-affine. physical_call keeps one worker, so this
+    # instance stays on that thread for the process lifetime.
+    sct = _thread_mss()
+    frame = np.array(
+        sct.grab({"left": left, "top": top, "width": max(1, width), "height": max(1, height)})
+    )
     return frame[:, :, :3]
 
 
-def _grab_from_game_window(left: int, top: int, width: int, height: int) -> np.ndarray | None:
-    hwnd = _game_hwnd
-    if hwnd is None:
-        return None
-    from window_capture import client_origin, grab_hwnd
-
-    frame = grab_hwnd(hwnd)
-    if frame is None:
-        return None
-    origin_x, origin_y = client_origin(hwnd)
-    x = int(left - origin_x)
-    y = int(top - origin_y)
-    h, w = frame.shape[:2]
-    x0 = max(0, x)
-    y0 = max(0, y)
-    x1 = min(w, x + max(1, width))
-    y1 = min(h, y + max(1, height))
-    if x1 <= x0 or y1 <= y0:
-        return None
-    return frame[y0:y1, x0:x1]
-
-
-def grab_desktop() -> np.ndarray:
+def list_physical_monitors() -> list[dict[str, int]]:
     from dpi import physical_call
 
-    return physical_call(_grab_desktop_impl)
+    return physical_call(_list_monitors_impl)
 
 
-def _grab_desktop_impl() -> np.ndarray:
-    import mss
+def _list_monitors_impl() -> list[dict[str, int]]:
+    sct = _thread_mss()
+    monitors: list[dict[str, int]] = []
+    for index, monitor in enumerate(sct.monitors[1:], start=1):
+        monitors.append(
+            {
+                "index": index,
+                "left": int(monitor["left"]),
+                "top": int(monitor["top"]),
+                "width": int(monitor["width"]),
+                "height": int(monitor["height"]),
+            }
+        )
+    return monitors
 
-    with mss.mss() as sct:
-        monitor = sct.monitors[0]
-        global _desktop_origin
-        _desktop_origin = (int(monitor["left"]), int(monitor["top"]))
-        frame = np.array(sct.grab(monitor))
-    return frame[:, :, :3]
+
+def _virtual_bounds(monitors: list[dict[str, int]]) -> tuple[int, int, int, int]:
+    left = min(m["left"] for m in monitors)
+    top = min(m["top"] for m in monitors)
+    right = max(m["left"] + m["width"] for m in monitors)
+    bottom = max(m["top"] + m["height"] for m in monitors)
+    return left, top, right, bottom
 
 
-def find_game_window() -> tuple[int, int, int, int, str] | None:
-    """Return (left, top, right, bottom, title) in virtual-screen coordinates."""
-    global _game_hwnd, _last_game_hwnd
-    import ctypes
-    from ctypes import wintypes
-
-    from dpi import logical_to_physical
-
-    user32 = ctypes.windll.user32
-    enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-    found: list[tuple[int, int, int, int, int, str]] = []
-
-    def _enum(hwnd: int, _lparam: int) -> bool:
-        if not user32.IsWindowVisible(hwnd):
-            return True
-        length = user32.GetWindowTextLengthW(hwnd)
-        if length == 0:
-            return True
-        buf = ctypes.create_unicode_buffer(length + 1)
-        user32.GetWindowTextW(hwnd, buf, length + 1)
-        title = buf.value
-        if title == _OWN_TITLE or _GAME_TITLE.search(title) is None:
-            return True
-        rect = wintypes.RECT()
-        user32.GetWindowRect(hwnd, ctypes.byref(rect))
-        left, top = logical_to_physical(hwnd, rect.left, rect.top)
-        right, bottom = logical_to_physical(hwnd, rect.right, rect.bottom)
-        width = right - left
-        height = bottom - top
-        if width >= 400 and height >= 300:
-            found.append((int(hwnd), left, top, right, bottom, title))
-        return True
-
-    callback = enum_proc(_enum)
-    user32.EnumWindows(callback, 0)
-    if not found and _last_game_hwnd and user32.IsWindow(_last_game_hwnd):
-        hwnd = _last_game_hwnd
-        rect = wintypes.RECT()
-        user32.GetWindowRect(hwnd, ctypes.byref(rect))
-        left, top = logical_to_physical(hwnd, rect.left, rect.top)
-        right, bottom = logical_to_physical(hwnd, rect.right, rect.bottom)
-        width = right - left
-        height = bottom - top
-        if width >= 400 and height >= 300:
-            found.append((int(hwnd), left, top, right, bottom, ""))
-    if not found:
-        _game_hwnd = None
+def _clamp_rect(
+    left: int, top: int, width: int, height: int, bounds: tuple[int, int, int, int]
+) -> tuple[int, int, int, int] | None:
+    b_left, b_top, b_right, b_bottom = bounds
+    x0 = max(left, b_left)
+    y0 = max(top, b_top)
+    x1 = min(left + width, b_right)
+    y1 = min(top + height, b_bottom)
+    if x1 - x0 < 8 or y1 - y0 < 6:
         return None
-    found.sort(key=lambda item: (item[3] - item[1]) * (item[4] - item[2]), reverse=True)
-    hwnd, left, top, right, bottom, title = found[0]
-    _game_hwnd = hwnd
-    _last_game_hwnd = hwnd
-    return (left, top, right, bottom, title)
+    return x0, y0, x1 - x0, y1 - y0
 
 
-def capture_for_search() -> tuple[np.ndarray, int, int]:
-    """Grab the game window only. Fallback is the full desktop."""
-    from window_capture import client_bounds, grab_hwnd
+def _match_grab(
+    left: int,
+    top: int,
+    width: int,
+    height: int,
+    scales: tuple[float, ...],
+    grab_fn: GrabFn,
+) -> tuple[tuple[int, int, int, int] | None, float]:
+    if width < 8 or height < 6:
+        return None, 0.0
+    image = grab_fn(left, top, width, height)
+    label_rect, score = find_label(image, scales=scales)
+    if label_rect is None:
+        return None, score
+    h, w = image.shape[:2]
+    ocr_rect = label_rect_to_ocr_rect(label_rect, w, h)
+    return to_virtual_rect(ocr_rect, (left, top)), score
 
-    game = find_game_window()
-    if game is not None and _game_hwnd is not None:
-        hwnd = _game_hwnd
-        image = grab_hwnd(hwnd)
-        if image is not None:
-            origin_x, origin_y, _width, _height = client_bounds(hwnd)
-            return image, origin_x, origin_y
-        left, top, width, height = client_bounds(hwnd)
-        image = _grab_mss_region(left, top, width, height)
-        return image, left, top
-    image = grab_desktop()
-    return image, _desktop_origin[0], _desktop_origin[1]
+
+def _ordered_monitors(
+    monitors: list[dict[str, int]], last_monitor_index: int | None
+) -> list[dict[str, int]]:
+    if last_monitor_index is None:
+        return list(monitors)
+    preferred = [m for m in monitors if m["index"] == last_monitor_index]
+    rest = [m for m in monitors if m["index"] != last_monitor_index]
+    return preferred + rest
+
+
+def search_exp_label(
+    *,
+    last_rect: tuple[int, int, int, int] | None = None,
+    last_monitor_index: int | None = None,
+    grab_fn: GrabFn | None = None,
+    monitors_fn: MonitorsFn | None = None,
+    dpi_fn: DpiFn | None = None,
+) -> tuple[tuple[int, int, int, int] | None, int | None]:
+    """Neighborhood → per monitor bottom band then upper remainder. Never monitors[0].
+
+    Picks the highest-scoring hit so IDE text like ``maplestory_exp_stats`` does not
+    beat the real game label. Stops early only on a confident match.
+    """
+    from dpi import dpi_scale_at
+
+    grab = grab_fn or grab_region
+    monitors = (monitors_fn or list_physical_monitors)()
+    if not monitors:
+        return None, None
+    dpi_at = dpi_fn or dpi_scale_at
+    bounds = _virtual_bounds(monitors)
+    best: tuple[float, tuple[int, int, int, int], int | None] | None = None
+
+    def _consider(
+        hit: tuple[int, int, int, int] | None, score: float, mon: int | None
+    ) -> tuple[tuple[int, int, int, int], int | None] | None:
+        nonlocal best
+        if hit is None or score < MATCH_THRESHOLD:
+            return None
+        if best is None or score > best[0]:
+            best = (score, hit, mon)
+        if score >= CONFIDENT_MATCH:
+            return hit, mon
+        return None
+
+    if last_rect is not None:
+        lx, ly, lw, lh = last_rect
+        pad = NEIGHBORHOOD_PAD
+        region = _clamp_rect(lx - pad, ly - pad, lw + 2 * pad, lh + 2 * pad, bounds)
+        if region is not None:
+            cx = region[0] + region[2] // 2
+            cy = region[1] + region[3] // 2
+            hit, score = _match_grab(*region, scales_for_dpi(dpi_at(cx, cy)), grab)
+            mon = last_monitor_index
+            if hit is not None and mon is None:
+                mon = _monitor_index_for_point(
+                    hit[0] + hit[2] // 2, hit[1] + hit[3] // 2, monitors
+                )
+            early = _consider(hit, score, mon)
+            if early is not None:
+                return early
+
+    for monitor in _ordered_monitors(monitors, last_monitor_index):
+        left = monitor["left"]
+        top = monitor["top"]
+        width = monitor["width"]
+        height = monitor["height"]
+        scales = scales_for_dpi(dpi_at(left + width // 2, top + height // 2))
+        band_h = max(1, int(round(height * BOTTOM_BAND_FRACTION)))
+        band_top = top + height - band_h
+        hit, score = _match_grab(left, band_top, width, band_h, scales, grab)
+        early = _consider(hit, score, monitor["index"])
+        if early is not None:
+            return early
+        upper_h = height - band_h
+        if upper_h >= 6:
+            hit, score = _match_grab(left, top, width, upper_h, scales, grab)
+            early = _consider(hit, score, monitor["index"])
+            if early is not None:
+                return early
+
+    if best is None:
+        return None, None
+    return best[1], best[2]
+
+
+def _monitor_index_for_point(
+    x: int, y: int, monitors: list[dict[str, int]]
+) -> int | None:
+    for monitor in monitors:
+        if (
+            monitor["left"] <= x < monitor["left"] + monitor["width"]
+            and monitor["top"] <= y < monitor["top"] + monitor["height"]
+        ):
+            return monitor["index"]
+    return monitors[0]["index"] if monitors else None

@@ -22,6 +22,11 @@ class ParseExpTests(unittest.TestCase):
     def test_strips_percent_when_opening_bracket_is_missing(self):
         self.assertEqual(parse_exp("EXP 6710620.709]"), 67106)
 
+    def test_strips_percent_when_bracket_is_read_as_one(self):
+        # Preview "EXP 106034 [86.38%]" → OCR "106034186.38%" or "106034186381".
+        self.assertEqual(parse_exp("EXP 106034186.38%"), 106034)
+        self.assertEqual(parse_exp("EXP 106034186381"), 106034)
+
     def test_treats_ocr_sui_as_percent(self):
         self.assertEqual(parse_exp("XP 67106[20.70岁]"), 67106)
 

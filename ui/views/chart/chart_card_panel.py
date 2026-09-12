@@ -39,9 +39,6 @@ class ChartCardPanel(Panel):
         )
         self.canvas.pack(pady=(0, bottom_pad))
 
-    def set_title(self, title: str) -> None:
-        self._title.configure(text=title)
-
     def apply_theme(self) -> None:
         super().apply_theme()
         self.canvas.configure(

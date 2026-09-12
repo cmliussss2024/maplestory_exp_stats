@@ -64,7 +64,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="MapleStoryExpStats",
+    name="mses",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

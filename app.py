@@ -8,6 +8,12 @@ from dpi import disable_per_monitor_dpi
 
 disable_per_monitor_dpi()
 
+import os
+
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 import math
 import time
 import tkinter as tk
@@ -24,15 +30,11 @@ from ui import theme
 from ui.drawing import fit_image
 from ui.styles import Spacing, Type
 from ui.views.overlay_window import OverlayWindow
-from ui.overlay_log import overlay_log
 from vision import (
-    capture_for_search,
-    find_label,
     grab_region,
     label_present,
-    label_rect_to_ocr_rect,
     read_exp_reading_from_bgr,
-    to_virtual_rect,
+    search_exp_label,
     warmup,
 )
 
@@ -57,6 +59,11 @@ def _status_color(state: LocatorState) -> str:
     if state == LocatorState.FAILED:
         return Type.Info.status_error
     return Type.Info.status_search
+
+
+def _set_var(var: tk.StringVar, value: str) -> None:
+    if var.get() != value:
+        var.set(value)
 
 
 def _fmt(value: int | None) -> str:
@@ -85,7 +92,7 @@ def _fmt_duration(seconds: float | None) -> str:
 class ExpRateApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("冒险岛经验统计助手")
+        self.root.title("经验统计助手")
         self.root.resizable(False, False)
         self.root.attributes("-topmost", True)
         self.locator = Locator()
@@ -93,10 +100,7 @@ class ExpRateApp:
         self.session = RateTracker(history_path=HISTORY_PATH)
         self._busy = False
         self._closed = False
-        self._last_exp: int | None = None
-        self._last_percent: float | None = None
-        self._eta_exp: int | None = None
-        self._eta_percent: float | None = None
+        self._accepted_percent: float | None = None
         self._window_placed = False
         self._tick_job: str | None = None
         self._ui_job: str | None = None
@@ -108,6 +112,7 @@ class ExpRateApp:
         self._float: OverlayWindow | None = None
         self._overlay_scale = 1.0
         self._preview_crop = None
+        self._last_lock_crop: bytes | None = None
 
         # Apply the persisted theme before any widget is created so the first
         # frame already uses the right palette.
@@ -163,14 +168,6 @@ class ExpRateApp:
             return
         self.root.update_idletasks()
         x, y = self.root.winfo_x(), self.root.winfo_y()
-        overlay_log(
-            "enter_float",
-            x=x,
-            y=y,
-            scale=round(self._overlay_scale, 4),
-            root=self.root.geometry(),
-            tk_in=round(float(self.root.winfo_fpixels("1i")), 2),
-        )
         self._float = OverlayWindow(
             self.root,
             vars_map=self.current_vars,
@@ -186,7 +183,6 @@ class ExpRateApp:
         self._float = None
         pos = overlay.position() if overlay is not None else None
         if overlay is not None:
-            overlay_log("exit_float", scale=round(overlay.scale, 4), pos=pos)
             self._overlay_scale = overlay.scale
             overlay.destroy()
         self.root.deiconify()
@@ -235,16 +231,9 @@ class ExpRateApp:
             except tk.TclError:
                 pass
             setattr(self, attr, None)
-        try:
-            from window_capture import shutdown_capture
-
-            shutdown_capture()
-        except Exception:
-            pass
         if self._float is not None:
             pos = self._float.position()
             overlay = self._float
-            overlay_log("close_float", scale=round(overlay.scale, 4), pos=pos)
             self._overlay_scale = overlay.scale
             self._float = None
             overlay.destroy()
@@ -256,6 +245,7 @@ class ExpRateApp:
         self.root.destroy()
 
     def retry(self) -> None:
+        self._last_lock_crop = None
         self.locator.retry()
         self._refresh_status()
 
@@ -267,8 +257,10 @@ class ExpRateApp:
 
     def clear_session(self) -> None:
         self.session.clear()
-        self._refresh_rates(time.time())
-        self._redraw_chart(time.time())
+        self.current.clear()
+        now = time.time()
+        self._refresh_rates(now)
+        self._redraw_chart(now)
 
     def on_toggle_theme(self) -> None:
         next_name = "dark" if theme.current_theme() == "light" else "light"
@@ -303,8 +295,8 @@ class ExpRateApp:
 
     def _refresh_status(self) -> None:
         state = self.locator.state
-        self.status.set(STATUS_TEXT[state])
-        self.status_detail.set(self._status_detail())
+        _set_var(self.status, STATUS_TEXT[state])
+        _set_var(self.status_detail, self._status_detail())
         self.status_label.configure(foreground=_status_color(state))
         if state == LocatorState.FAILED:
             self.retry_btn.configure(state="normal")
@@ -313,26 +305,27 @@ class ExpRateApp:
         self.window.info_section.set_preview_visible(state == LocatorState.LOCKED)
 
     def _apply_column(self, vars_map: dict[str, tk.StringVar], rates: Rates) -> None:
-        vars_map["per_sec"].set(_fmt(rates.per_sec))
-        vars_map["per_min"].set(_fmt(rates.per_min))
-        vars_map["per_5min"].set(_fmt(rates.per_5min))
-        vars_map["per_hour"].set(_fmt(rates.per_hour))
+        _set_var(vars_map["per_sec"], _fmt(rates.per_sec))
+        _set_var(vars_map["per_min"], _fmt(rates.per_min))
+        _set_var(vars_map["per_5min"], _fmt(rates.per_5min))
+        _set_var(vars_map["per_hour"], _fmt(rates.per_hour))
 
     def _refresh_rates(self, now: float) -> None:
         self._apply_column(self.current_vars, self.current.hourly_rates(now))
-        self.current_exp.set(_fmt(self._last_exp))
-        self.current_percent.set(_fmt_percent(self._last_percent))
-        self.session_exp.set(_fmt(self.session.total_gained()))
-        self.session_rate.set(_fmt(self.session.hourly_rates(now).per_hour))
-        self.session_time.set(_fmt_duration(self.session.elapsed_since_first_gain(now)))
-        current_elapsed = self.current.elapsed_since_first_gain(now)
+        if self.current.last_exp is None:
+            self._accepted_percent = None
+        _set_var(self.current_exp, _fmt(self.current.last_exp))
+        _set_var(self.current_percent, _fmt_percent(self._accepted_percent))
+        _set_var(self.session_exp, _fmt(self.session.total_gained()))
+        _set_var(self.session_rate, _fmt(self.session.hourly_rates(now).per_hour))
+        _set_var(self.session_time, _fmt_duration(self.session.elapsed_since_first_gain(now)))
         eta = eta_to_level(
-            self._eta_exp,
-            self._eta_percent,
+            self.current.last_exp,
+            self._accepted_percent,
             self.current.total_gained(),
-            current_elapsed,
+            self.current.elapsed_since_first_gain(now),
         )
-        self.level_eta.set(_fmt_duration(eta))
+        _set_var(self.level_eta, _fmt_duration(eta))
 
     def _ui_tick(self) -> None:
         if self._closed or not self.root.winfo_exists():
@@ -356,8 +349,8 @@ class ExpRateApp:
         self._busy = True
         try:
             self._scan_once()
-        except Exception as exc:
-            overlay_log("scan_error", error=repr(exc))
+        except Exception:
+            pass
         finally:
             self._busy = False
             if self._closed or not self.root.winfo_exists():
@@ -370,53 +363,48 @@ class ExpRateApp:
     def _scan_once(self) -> None:
         now = time.time()
         if self.locator.state == LocatorState.FAILED:
-            self._set_live_reading(None)
-            self._refresh_rates(now)
             return
 
         if self.locator.state in (LocatorState.SEARCHING, LocatorState.RELOCATING):
-            image, origin_x, origin_y = capture_for_search()
-            label_rect, _score = find_label(image)
-            virtual_ocr = None
-            if label_rect is not None:
-                h, w = image.shape[:2]
-                ocr_rect = label_rect_to_ocr_rect(label_rect, w, h)
-                virtual_ocr = to_virtual_rect(ocr_rect, (origin_x, origin_y))
-            self.locator.on_search_result(virtual_ocr)
+            self._last_lock_crop = None
+            self.window.info_section.flush_hidden_preview(self.root)
+            virtual_ocr, monitor_index = search_exp_label(
+                last_rect=self.locator.last_rect,
+                last_monitor_index=self.locator.last_monitor_index,
+            )
+            self.locator.on_search_result(virtual_ocr, monitor_index)
             if self.locator.state == LocatorState.LOCKED and virtual_ocr is not None:
                 self._consume_crop(grab_region(*virtual_ocr), now)
-            else:
-                self._set_live_reading(None)
-                self._refresh_rates(now)
             return
 
         if self.locator.state == LocatorState.LOCKED and self.locator.locked_rect is not None:
             crop = grab_region(*self.locator.locked_rect)
+            key = crop.tobytes()
+            if key == self._last_lock_crop:
+                self.locator.on_lock_check(True)
+                return
             found = label_present(crop)
             self.locator.on_lock_check(found)
             if found:
                 self._consume_crop(crop, now)
             else:
-                self._set_live_reading(None)
-                self._refresh_rates(now)
+                self._last_lock_crop = None
 
-    def _set_live_reading(self, reading: ExpReading | None) -> None:
-        if reading is None:
-            self._last_exp = None
-            self._last_percent = None
+    def _accept_percent(self, reading: ExpReading | None) -> None:
+        if reading is None or reading.exp != self.current.last_exp:
             return
-        self._last_exp = reading.exp
-        self._last_percent = reading.percent
-        self._eta_exp = reading.exp
-        self._eta_percent = reading.percent
+        self._accepted_percent = reading.percent
 
     def _consume_crop(self, crop, now: float) -> None:
         self._update_preview(crop)
         reading = read_exp_reading_from_bgr(crop)
+        # Only skip later ticks after a successful read. A static bar that
+        # failed OCR once must be retried, not cached as "unchanged".
+        self._last_lock_crop = crop.tobytes() if reading is not None else None
         exp = None if reading is None else reading.exp
         self.current.tick(exp, now)
         self.session.tick(exp, now)
-        self._set_live_reading(reading)
+        self._accept_percent(reading)
         self._refresh_rates(now)
 
     def _update_preview(self, crop_bgr) -> None:
@@ -475,13 +463,23 @@ def _report_crash(exc: BaseException) -> None:
     try:
         import ctypes
 
-        ctypes.windll.user32.MessageBoxW(0, text, "冒险岛经验统计助手", 0x10)
+        ctypes.windll.user32.MessageBoxW(0, text, "经验统计助手", 0x10)
     except Exception:
         pass
 
 
+def _prefer_game_cpu() -> None:
+    """Stay below the game so a 1 Hz OCR tick does not steal a full timeslice."""
+    import ctypes
+
+    below_normal = 0x00004000
+    kernel32 = ctypes.windll.kernel32
+    kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), below_normal)
+
+
 def main() -> None:
     try:
+        _prefer_game_cpu()
         warmup()
         root = tk.Tk()
         ExpRateApp(root)

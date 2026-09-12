@@ -4,13 +4,14 @@ Per-monitor DPI on the UI thread makes Windows send WM_DPICHANGED whenever
 the window sits on a 150% display (or whenever capture temporarily switches
 the thread). Tk then rebuilds the layout: the window shrinks and flickers.
 
-The process stays DPI-unaware. mss grabs that need physical pixels run on a
-worker thread via physical_call. Graphics Capture runs on the caller thread.
+The process stays DPI-unaware. mss grabs that need physical pixels run on one
+long-lived worker thread via physical_call so GDI/mss handles can be reused.
 """
 
 from __future__ import annotations
 
 import ctypes
+import queue
 import threading
 from collections.abc import Callable
 from ctypes import wintypes
@@ -21,11 +22,6 @@ _user32.SetProcessDpiAwarenessContext.argtypes = [ctypes.c_void_p]
 _user32.SetProcessDpiAwarenessContext.restype = ctypes.c_int
 _user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
 _user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
-_user32.LogicalToPhysicalPointForPerMonitorDPI.argtypes = [
-    wintypes.HWND,
-    ctypes.POINTER(wintypes.POINT),
-]
-_user32.LogicalToPhysicalPointForPerMonitorDPI.restype = wintypes.BOOL
 
 _UNAWARE_GDISCALED = ctypes.c_void_p(-5)
 _UNAWARE = ctypes.c_void_p(-1)
@@ -33,6 +29,8 @@ _PER_MONITOR_V2 = ctypes.c_void_p(-4)
 
 _T = TypeVar("_T")
 _call_lock = threading.Lock()
+_work_queue: queue.Queue | None = None
+_worker_thread: threading.Thread | None = None
 
 
 def disable_per_monitor_dpi() -> None:
@@ -45,24 +43,31 @@ def disable_per_monitor_dpi() -> None:
         pass
 
 
-def logical_to_physical(hwnd: int, x: int, y: int) -> tuple[int, int]:
-    point = wintypes.POINT(int(x), int(y))
-    if not _user32.LogicalToPhysicalPointForPerMonitorDPI(hwnd, ctypes.byref(point)):
-        return int(x), int(y)
-    return int(point.x), int(point.y)
-
-
 def dpi_scale(hwnd: int, x: int = 0, y: int = 0) -> float:
     """Physical pixels per logical pixel on the monitor that contains the window.
 
-    Do not use LogicalToPhysicalPoint spanning 1000px: on a secondary display
-    (negative virtual coords) that ratio comes back inverted (e.g. 0.245).
     GetDpiForWindow is 96 for a DPI-unaware HWND, so ask the monitor instead.
     """
     try:
         return physical_call(_dpi_for_window, hwnd, int(x), int(y))
     except Exception:
         return 1.0
+
+
+def dpi_scale_at(x: int, y: int) -> float:
+    """Physical pixels per logical pixel for the monitor containing a virtual-screen point."""
+    try:
+        return physical_call(_dpi_at_point, int(x), int(y))
+    except Exception:
+        return 1.0
+
+
+def _dpi_at_point(x: int, y: int) -> float:
+    _user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+    _user32.MonitorFromPoint.restype = ctypes.c_void_p
+    point = wintypes.POINT(int(x), int(y))
+    scale = _monitor_dpi(int(_user32.MonitorFromPoint(point, 2)))
+    return scale if scale > 0 else 1.0
 
 
 def _monitor_dpi(monitor: int) -> float:
@@ -102,22 +107,42 @@ def _dpi_for_window(hwnd: int, x: int = 0, y: int = 0) -> float:
     return dpi / 96.0 if dpi else 1.0
 
 
-def physical_call(func: Callable[..., _T], *args: object) -> _T:
-    """Run func on a worker that is per-monitor DPI aware. Does not touch the UI thread."""
-    box: list[_T] = []
-    error: list[BaseException] = []
-
-    def worker() -> None:
+def _worker_loop() -> None:
+    _user32.SetThreadDpiAwarenessContext(_PER_MONITOR_V2)
+    assert _work_queue is not None
+    while True:
+        func, args, box, error, done = _work_queue.get()
         try:
-            _user32.SetThreadDpiAwarenessContext(_PER_MONITOR_V2)
             box.append(func(*args))
         except BaseException as exc:
             error.append(exc)
+        finally:
+            done.set()
 
+
+def _ensure_worker() -> None:
+    global _work_queue, _worker_thread
+    if _worker_thread is not None and _worker_thread.is_alive():
+        return
+    _work_queue = queue.Queue()
+    _worker_thread = threading.Thread(
+        target=_worker_loop, daemon=True, name="physical-dpi"
+    )
+    _worker_thread.start()
+
+
+def physical_call(func: Callable[..., _T], *args: object) -> _T:
+    """Run func on the long-lived per-monitor-DPI worker. Does not touch the UI thread."""
+    box: list[_T] = []
+    error: list[BaseException] = []
+    done = threading.Event()
     with _call_lock:
-        thread = threading.Thread(target=worker, daemon=True)
-        thread.start()
-        thread.join()
+        _ensure_worker()
+        assert _work_queue is not None
+        _work_queue.put((func, args, box, error, done))
+        while not done.wait(timeout=1.0):
+            if _worker_thread is None or not _worker_thread.is_alive():
+                raise RuntimeError("physical-dpi worker died")
     if error:
         raise error[0]
     return box[0]

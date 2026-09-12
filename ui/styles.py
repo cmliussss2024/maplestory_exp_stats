@@ -57,12 +57,11 @@ class Spacing:
         cell_spacing = 2
         value_unit_gap = 4
         clear_pad_y = (4, 4)
-        hint_pad_y = (0, 2)
 
     class Info:
         cell_spacing = 4
         retry_preview_spacing = 8
-        # Logical 100% EXP crop is 121x34; keep the old 2x preview slot at all DPIs.
+        # Logical 100% EXP crop is 172x37; keep the 242x68 preview slot (fits the 340px window).
         preview_width = 242
         preview_height = 68
 
@@ -122,10 +121,6 @@ class Type:
         unit_color = _PaletteColor("text_tertiary")
 
     class Cumulative:
-        header = (_FAMILY, 13, "bold")
-        header_color = _PaletteColor("text_primary")
-        hint = (_FAMILY, 9)
-        hint_color = _PaletteColor("text_tertiary")
         caption = (_FAMILY, 10)
         caption_color = _PaletteColor("text_primary")
         value = (_FAMILY, 13, "bold")

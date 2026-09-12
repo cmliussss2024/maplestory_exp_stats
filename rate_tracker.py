@@ -20,7 +20,6 @@ class SanitizedExp:
     gains: tuple[tuple[float, int], ...]
     first_gain_at: float | None
     last_gain_at: float | None
-    last_gain: int
 
 
 @dataclass(frozen=True)
@@ -119,9 +118,27 @@ def _is_recovery_jump(a_exp: int, v_exp: int, c_exp: int) -> bool:
     return len(str(c_exp)) > len(str(v_exp))
 
 
+def _rate_denom(elapsed: float | None, gained: int) -> float | None:
+    if elapsed is None or elapsed <= 0 or gained <= 0:
+        return None
+    return max(elapsed, 1.0)
+
+
+def rates_from_elapsed(gained: int, elapsed: float | None) -> Rates:
+    denom = _rate_denom(elapsed, gained)
+    if denom is None:
+        return Rates(0, 0, 0, 0)
+    return Rates(
+        per_sec=int(round(gained / denom)),
+        per_min=int(round(gained * 60.0 / denom)),
+        per_5min=int(round(gained * 300.0 / denom)),
+        per_hour=int(round(gained * 3600.0 / denom)),
+    )
+
+
 def sanitize_exp_series(points: Sequence[ExpPoint], now: float) -> SanitizedExp:
     if not points:
-        return SanitizedExp(None, (), None, None, 0)
+        return SanitizedExp(None, (), None, None)
 
     accepted: list[ExpPoint] = []
     gains: list[tuple[float, int]] = []
@@ -177,8 +194,7 @@ def sanitize_exp_series(points: Sequence[ExpPoint], now: float) -> SanitizedExp:
     last_exp = accepted[-1].exp
     first_gain_at = gains[0][0] if gains else None
     last_gain_at = gains[-1][0] if gains else None
-    last_gain = gains[-1][1] if gains else 0
-    return SanitizedExp(last_exp, tuple(gains), first_gain_at, last_gain_at, last_gain)
+    return SanitizedExp(last_exp, tuple(gains), first_gain_at, last_gain_at)
 
 
 class RateTracker:
@@ -192,6 +208,7 @@ class RateTracker:
         self._first_gain_at: float | None = None
         self._last_gain_at: float | None = None
         self._paused: float = 0.0
+        self._resumed_at: float | None = None
         self._gains: deque[tuple[float, int]] = deque()
         if self.history_path is not None:
             self._load_history()
@@ -206,23 +223,24 @@ class RateTracker:
 
     def hourly_rates(self, now: float) -> Rates:
         self._refresh(now)
-        if self._first_gain_at is None:
-            return Rates(0, 0, 0, 0)
-        gained = self.total_gained()
-        if gained <= 0:
-            return Rates(0, 0, 0, 0)
-        elapsed = max(now - self._first_gain_at - self._paused, 1.0)
-        return Rates(
-            per_sec=int(round(gained / elapsed)),
-            per_min=int(round(gained * 60.0 / elapsed)),
-            per_5min=int(round(gained * 300.0 / elapsed)),
-            per_hour=int(round(gained * 3600.0 / elapsed)),
-        )
+        return rates_from_elapsed(self.total_gained(), self._elapsed_at(now))
 
     def elapsed_since_first_gain(self, now: float) -> float | None:
+        self._refresh(now)
+        return self._elapsed_at(now)
+
+    def _elapsed_at(self, now: float) -> float | None:
         if self._first_gain_at is None:
             return None
-        return max(now - self._first_gain_at - self._paused, 0.0)
+        elapsed = now - self._first_gain_at
+        # Offline gap is subtracted only at/after resume. See docs/charts.md.
+        if (
+            self._resumed_at is not None
+            and self._first_gain_at < self._resumed_at
+            and now >= self._resumed_at
+        ):
+            elapsed -= self._paused
+        return max(elapsed, 0.0)
 
     def total_gained(self) -> int:
         return sum(delta for _ts, delta in self._gains)
@@ -233,6 +251,7 @@ class RateTracker:
         self._first_gain_at = None
         self._last_gain_at = None
         self._paused = 0.0
+        self._resumed_at = None
         self._gains.clear()
         if self.history_path is None:
             return
@@ -271,24 +290,7 @@ class RateTracker:
             return self._per_sec_rate_values(times)
         return self._cumulative_values(times)
 
-    def _per_sec_rate_values(self, times: list[float]) -> list[int]:
-        gains = list(self._gains)
-        first = self._first_gain_at
-        idx = 0
-        running = 0
-        values: list[int] = []
-        for sample in times:
-            while idx < len(gains) and gains[idx][0] <= sample:
-                running += gains[idx][1]
-                idx += 1
-            elapsed = sample - (first or sample) - self._paused
-            if first is None or sample <= first or running <= 0 or elapsed <= 0:
-                values.append(0)
-                continue
-            values.append(int(round(running / max(elapsed, 1.0))))
-        return values
-
-    def _cumulative_values(self, times: list[float]) -> list[int]:
+    def _gained_by(self, times: list[float]) -> list[int]:
         gains = list(self._gains)
         idx = 0
         running = 0
@@ -299,6 +301,15 @@ class RateTracker:
                 idx += 1
             values.append(running)
         return values
+
+    def _per_sec_rate_values(self, times: list[float]) -> list[int]:
+        return [
+            rates_from_elapsed(running, self._elapsed_at(sample)).per_sec
+            for sample, running in zip(times, self._gained_by(times))
+        ]
+
+    def _cumulative_values(self, times: list[float]) -> list[int]:
+        return self._gained_by(times)
 
     def _append_history(self, now: float, exp: int) -> None:
         if self.history_path is None:
@@ -330,9 +341,11 @@ class RateTracker:
         if self._points:
             last_t = self._points[-1].t
             self._refresh(last_t)
-            gap = time.time() - last_t
+            resumed = time.time()
+            gap = resumed - last_t
             if gap > 0:
                 self._paused = gap
+                self._resumed_at = resumed
 
 
 def eta_to_level(
@@ -350,4 +363,7 @@ def eta_to_level(
     remaining = current_exp * (100.0 - percent) / percent
     if remaining <= 0:
         return 0.0
-    return remaining * elapsed / gained
+    denom = _rate_denom(elapsed, gained)
+    if denom is None:
+        return None
+    return remaining * denom / gained

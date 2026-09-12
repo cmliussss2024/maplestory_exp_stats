@@ -23,12 +23,12 @@ class RateSectionPanel(SectionPanel):
         **kwargs: Any,
     ) -> None:
         super().__init__(master, **kwargs)
-        self.forecast = RateColumnPanel(
+        self.column = RateColumnPanel(
             self.content,
             vars_map=current_vars,
             on_clear=on_clear_current,
             on_float=on_float,
             on_toggle_theme=on_toggle_theme,
         )
-        self.forecast.pack(fill="x")
-        self.theme_button = self.forecast.theme_button
+        self.column.pack(fill="x")
+        self.theme_button = self.column.theme_button

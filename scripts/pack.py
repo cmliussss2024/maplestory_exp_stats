@@ -1,4 +1,4 @@
-"""Build a portable Windows folder: dist/MapleStoryExpStats/"""
+"""Build a portable Windows folder: dist/MapleStoryExpStats/ (exe: mses.exe)."""
 
 from __future__ import annotations
 

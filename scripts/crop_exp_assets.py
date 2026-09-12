@@ -1,4 +1,4 @@
-"""Crop EXP assets from the live game window.
+"""Crop EXP assets from a live desktop search hit.
 
     python scripts/crop_exp_assets.py
 """
@@ -19,20 +19,21 @@ from vision import (  # noqa: E402
     OCR_HEIGHT,
     OCR_WIDTH,
     _load_label,
-    capture_for_search,
     crop_bgr,
-    find_game_window,
     find_label,
+    grab_region,
     label_rect_to_ocr_rect,
+    list_physical_monitors,
     read_exp_reading_from_bgr,
+    search_exp_label,
 )
 
-# EXP cell at 1080p 1x, relative to the 24x13 label: inset (7, 5), size 134x38.
-# Drops HUD chrome; keeps the dark rounded chip and the progress-bar cap.
-_BAR_INSET_X = 7 / 24
-_BAR_INSET_Y = 5 / 13
-_BAR_W = 134 / 24
-_BAR_H = 38 / 13
+# EXP cell at 1080p 1x, relative to the 24x13 label: inset (2, 4), size 174x39.
+# Flush to the yellow slot white border; drops HP/MP and mall.
+_BAR_INSET_X = 2 / 24
+_BAR_INSET_Y = 4 / 13
+_BAR_W = 174 / 24
+_BAR_H = 39 / 13
 
 
 def _clamp_rect(
@@ -46,15 +47,24 @@ def _clamp_rect(
 
 
 def main() -> None:
-    game = find_game_window()
-    if game is None:
-        raise SystemExit("no game window")
-    left, top, right, bottom, title = game
-    image, origin_x, origin_y = capture_for_search()
+    virtual_ocr, monitor_index = search_exp_label()
+    if virtual_ocr is None:
+        raise SystemExit("EXP label not found on any monitor")
+
+    monitors = {m["index"]: m for m in list_physical_monitors()}
+    monitor = monitors.get(monitor_index) if monitor_index is not None else None
+    if monitor is None:
+        raise SystemExit(f"monitor {monitor_index} missing after hit")
+
+    left = monitor["left"]
+    top = monitor["top"]
+    width = monitor["width"]
+    height = monitor["height"]
+    image = grab_region(left, top, width, height)
     screen_h, screen_w = image.shape[:2]
     label_rect, score = find_label(image)
     if label_rect is None:
-        raise SystemExit(f"label not found score={score:.4f}")
+        raise SystemExit(f"label not found on monitor {monitor_index} score={score:.4f}")
 
     lx, ly, lw, lh = label_rect
     native_w = _load_label().shape[1]
@@ -76,9 +86,9 @@ def main() -> None:
     cv2.imwrite(str(ASSETS / "exp_bar.png"), bar)
     cv2.imwrite(str(ASSETS / "exp_ocr.png"), ocr_crop)
 
-    print(f"title={title!r}")
-    print(f"window={right - left}x{bottom - top} at {left},{top}")
-    print(f"capture={screen_w}x{screen_h} origin={origin_x},{origin_y}")
+    print(f"monitor={monitor_index} {width}x{height} at {left},{top}")
+    print(f"search_ocr={virtual_ocr}")
+    print(f"capture={screen_w}x{screen_h}")
     print(f"label={label_rect} score={score:.4f} scale={scale:.4f}")
     print(f"bar={bar_rect} ocr={ocr_rect} constants={OCR_WIDTH}x{OCR_HEIGHT} inset={LABEL_IN_BAR}")
     print(f"wrote {label.shape[1]}x{label.shape[0]} exp_label.png")
